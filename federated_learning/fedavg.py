@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 
 class FedAvg:
@@ -15,7 +16,7 @@ class FedAvg:
         self.epochs = epochs
         self.rounds = rounds
         self.clients = [self.create_client(i, d) for i, d in enumerate(client_data)]
-        self.global_model = model_fn()
+        self.global_model = model_fn().to(self.device)
 
     def create_client(self, client_id, data_loader):
         return _Client(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn)
@@ -24,7 +25,7 @@ class FedAvg:
         global_weights = self.global_model.state_dict()
         weights = []
         n_c = int(np.ceil(self.alpha * len(self.clients)))
-        for c in np.random.choice(self.clients, n_c):
+        for c in tqdm(np.random.choice(self.clients, n_c)):
             w_i = c.train_round(global_weights, self.epochs)
             weights.append(w_i)
 
@@ -85,7 +86,7 @@ class _Client:
         optimizer = self.build_optimizer(model)
 
         for t in range(epochs):
-            print(f"Client {self.client_id}: Epoch {t + 1}")
+            # print(f"Client {self.client_id}: Epoch {t + 1}")
             size = len(self.data_loader)
 
             model.train()
@@ -101,8 +102,8 @@ class _Client:
                 optimizer.step()
                 optimizer.zero_grad()
 
-                if batch % 200 == 0:
-                    loss = loss.item()
-                    print(f"Client {self.client_id}: loss: {loss:>7f}")
+                # if batch % 100 == 0:
+                #     loss = loss.item()
+                #     print(f"Client {self.client_id}: loss: {loss:>7f}")
 
         return model.state_dict()

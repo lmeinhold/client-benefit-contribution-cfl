@@ -7,16 +7,16 @@ from torch.utils.data import DataLoader, random_split
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
-from src.federated_learning.fedavg import FedAvg
-from src.federated_learning.torchutils import get_device
-from src.models.mnist import CNN
+from federated_learning.fedavg import FedAvg
+from federated_learning.torchutils import get_device
+from models.mnist import CNN
 
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 N_CLIENTS = 100
 LR = 2e-3
 EPOCHS = 5
-ROUNDS = 50
-ALPHA = 0.6
+ROUNDS = 30
+ALPHA = 0.8
 
 
 def load_data():
