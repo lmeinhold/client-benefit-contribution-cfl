@@ -1,10 +1,14 @@
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
 
 class FedAvg:
-    def __init__(self, client_data: list[DataLoader], model_fn,
-                 optimizer_fn, loss_fn, rounds: int, epochs: int):
+    def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int,
+                 alpha: float = 0.3, device: str = "cpu", test_data: DataLoader = None):
+        self.alpha = alpha
+        self.device = device
+        self.test_data = test_data
         self.model_fn = model_fn
         self.loss_fn = loss_fn
         self.optimizer_fn = optimizer_fn
@@ -19,27 +23,43 @@ class FedAvg:
     def train_round(self):
         global_weights = self.global_model.state_dict()
         weights = []
-        for c in self.clients:
+        n_c = int(np.ceil(self.alpha * len(self.clients)))
+        for c in np.random.choice(self.clients, n_c):
             w_i = c.train_round(global_weights, self.epochs)
             weights.append(w_i)
 
         updated_weights = self.aggregate_weights(global_weights, weights)
 
-        self.global_model.load_state_dict(updated_weights)
+        self.global_model.load_state_dict(updated_weights, strict=False)
+
+    def test_round(self):
+        model = self.global_model
+        test_loss, correct = 0, 0
+        with torch.no_grad():
+            for X, y in self.test_data:
+                X, y = X.to(self.device), y.to(self.device)
+                pred = model(X)
+                test_loss += self.loss_fn(pred, y).item()
+                correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+            test_loss /= len(self.test_data)
+            correct /= len(self.test_data.dataset)
+            print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
     @staticmethod
     def aggregate_weights(global_weights, weights):
         updated_weights = {}
         for k in global_weights.keys():
-            client_weights = torch.stack([w_i[k] for w_i in weights])
-            print(f"{k}: {client_weights.dtype}")
-            updated_weights[k] = client_weights.mean(dim=0)
+            if k.endswith('.weight') or k.endswith('.bias'):
+                client_weights = torch.stack([w_i[k] for w_i in weights])
+                updated_weights[k] = client_weights.mean(dim=0)
         return updated_weights
 
     def fit(self):
         for r in range(self.rounds):
             print(f"FedAvg round {r + 1} --------------")
             self.train_round()
+            if self.test_data is not None:
+                self.test_round()
 
 
 class _Client:

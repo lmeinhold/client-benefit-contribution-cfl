@@ -8,13 +8,15 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 from src.federated_learning.fedavg import FedAvg
+from src.federated_learning.torchutils import get_device
 from src.models.mnist import CNN
 
 BATCH_SIZE = 32
-N_CLIENTS = 5
+N_CLIENTS = 100
 LR = 2e-3
-EPOCHS = 2
-ROUNDS = 1
+EPOCHS = 5
+ROUNDS = 50
+ALPHA = 0.6
 
 
 def load_data():
@@ -63,10 +65,14 @@ def main():
         optimizer_fn=create_optimizer,
         loss_fn=CrossEntropyLoss(),
         rounds=ROUNDS,
-        epochs=EPOCHS
+        epochs=EPOCHS,
+        alpha=ALPHA,
+        device=get_device(),
+        test_data=create_dataloader(test_data)
     )
 
     fa.fit()
+
 
 if __name__ == "__main__":
     main()
