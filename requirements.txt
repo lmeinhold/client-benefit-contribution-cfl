@@ -7,4 +7,3 @@ matplotlib
 seaborn
 tqdm
 docopt
-flwr

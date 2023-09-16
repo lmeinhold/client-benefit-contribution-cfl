@@ -9,3 +9,5 @@ def get_device() -> str:
     logging.debug(f"Using device '{device}'")
     return device
 
+
+StateDict = dict[str, torch.Tensor]

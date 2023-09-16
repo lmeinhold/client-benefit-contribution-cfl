@@ -1,10 +1,13 @@
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
+from tqdm import tqdm
+
+from federated_learning.base import FederatedLearningAlgorithm, FederatedLearningClient
+from federated_learning.torchutils import StateDict
 
 
-class FedAvg:
+class FedAvg(FederatedLearningAlgorithm):
     def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int,
                  alpha: float = 0.3, device: str = "cpu", test_data: DataLoader = None):
         self.alpha = alpha
@@ -62,8 +65,11 @@ class FedAvg:
             if self.test_data is not None:
                 self.test_round()
 
+    def client_count(self):
+        return len(self.clients)
 
-class FedAvgClient:
+
+class FedAvgClient(FederatedLearningClient):
     def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, device="cpu"):
         self.client_id = client_id
         self.data_loader = data_loader
@@ -81,7 +87,7 @@ class FedAvgClient:
     def build_optimizer(self, model) -> torch.optim.Optimizer:
         return self.optimizer_fn(model.parameters())
 
-    def train_round(self, shared_state: dict[str, torch.Tensor], epochs: int):
+    def train_round(self, shared_state: StateDict, epochs: int) -> StateDict:
         model = self.build_model(shared_state)
         optimizer = self.build_optimizer(model)
 
