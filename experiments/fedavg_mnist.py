@@ -51,8 +51,8 @@ def create_model():
     return CNN()
 
 
-def create_optimizer(params):
-    return SGD(params, LR)
+def create_optimizer(params, lr):
+    return SGD(params, lr)
 
 
 def main():
@@ -62,7 +62,7 @@ def main():
     fa = FedAvg(
         client_data_loaders,
         model_fn=create_model,
-        optimizer_fn=create_optimizer,
+        optimizer_fn=lambda p: create_optimizer(p, LR),
         loss_fn=CrossEntropyLoss(),
         rounds=ROUNDS,
         epochs=EPOCHS,

@@ -4,7 +4,8 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 
-class FedAvg:
+class FedSoft:
+    """FedSoft: Soft Clustered Federated Learning with Proximal Local Updating"""
     def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int,
                  alpha: float = 0.3, device: str = "cpu", test_data: DataLoader = None):
         self.alpha = alpha
@@ -19,7 +20,10 @@ class FedAvg:
         self.global_model = model_fn().to(self.device)
 
     def create_client(self, client_id, data_loader):
-        return FedAvgClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn)
+        return FedSoftClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn)
+
+
+    def update_clustering(self):
 
     def train_round(self):
         global_weights = self.global_model.state_dict()
@@ -63,14 +67,15 @@ class FedAvg:
                 self.test_round()
 
 
-class FedAvgClient:
-    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, device="cpu"):
+class FedSoftClient:
+    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, initial_clusters: list[int], device="cpu"):
         self.client_id = client_id
         self.data_loader = data_loader
         self.model_fn = model_fn
         self.optimizer_fn = optimizer_fn
         self.loss_fn = loss_fn
         self.device = device
+        self.cluster_identities = initial_clusters
 
     def build_model(self, state_dict: dict[str, torch.Tensor]) -> torch.nn.Module:
         """build a model from given weights"""
@@ -81,8 +86,18 @@ class FedAvgClient:
     def build_optimizer(self, model) -> torch.optim.Optimizer:
         return self.optimizer_fn(model.parameters())
 
-    def train_round(self, shared_state: dict[str, torch.Tensor], epochs: int):
-        model = self.build_model(shared_state)
+    @staticmethod
+    def fuse_model_weights(self, weights: list[dict[str, torch.Tensor]]):
+        """Combine cluster weights into a single state_dict for round training"""
+        fused_weights = {}
+        for k in weights[0].keys():
+            if k.endswith('.weight') or k.endswith('.bias'):
+                cluster_weights = torch.stack([w_i[k] for w_i in weights])
+                fused_weights[k] = cluster_weights.mean(dim=0)
+        return fused_weights
+
+    def train_round(self, shared_states: list[dict[str, torch.Tensor]], epochs: int):
+        model = self.build_model(self.fuse_model_weights(shared_states))
         optimizer = self.build_optimizer(model)
 
         for t in range(epochs):
