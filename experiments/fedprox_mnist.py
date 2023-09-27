@@ -1,17 +1,8 @@
-import numpy as np
-import torch
 from torch.nn import CrossEntropyLoss
-from torch.nn.functional import one_hot
-from torch.optim import SGD
-from torch.utils.data import DataLoader, random_split
-from torchvision import datasets
-from torchvision.transforms import ToTensor
 
 from experiments.fedavg_mnist import load_data, create_dataloader, split_dataset, create_model, create_optimizer
-from federated_learning.fedavg import FedAvg
 from federated_learning.fedprox import FedProx
 from federated_learning.torchutils import get_device
-from models.mnist import CNN
 
 BATCH_SIZE = 64
 N_CLIENTS = 100
