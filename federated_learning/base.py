@@ -1,6 +1,6 @@
 import abc
 
-from federated_learning.torchutils import StateDict
+from utils.torchutils import StateDict
 
 
 class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):

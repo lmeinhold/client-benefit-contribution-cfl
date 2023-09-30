@@ -8,7 +8,7 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 from federated_learning.fedavg import FedAvg
-from federated_learning.torchutils import get_device
+from utils.torchutils import get_device
 from models.mnist import CNN
 
 BATCH_SIZE = 64

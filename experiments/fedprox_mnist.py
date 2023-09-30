@@ -2,7 +2,7 @@ from torch.nn import CrossEntropyLoss
 
 from experiments.fedavg_mnist import load_data, create_dataloader, split_dataset, create_model, create_optimizer
 from federated_learning.fedprox import FedProx
-from federated_learning.torchutils import get_device
+from utils.torchutils import get_device
 
 BATCH_SIZE = 64
 N_CLIENTS = 100

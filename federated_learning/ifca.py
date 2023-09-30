@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from federated_learning.base import FederatedLearningAlgorithm
 from federated_learning.fedavg import FedAvgClient
-from federated_learning.torchutils import StateDict, average_state_dicts
+from utils.torchutils import StateDict, average_state_dicts
 
 
 class IFCA(FederatedLearningAlgorithm):

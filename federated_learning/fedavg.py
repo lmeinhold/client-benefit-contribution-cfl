@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from federated_learning.base import FederatedLearningAlgorithm, FederatedLearningClient
-from federated_learning.torchutils import StateDict
+from utils.torchutils import StateDict
 
 
 class FedAvg(FederatedLearningAlgorithm):
