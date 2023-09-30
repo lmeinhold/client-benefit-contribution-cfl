@@ -1,6 +1,9 @@
 import abc
+import pathlib
 import uuid
 from datetime import datetime
+
+import jsonpickle
 
 
 def _new_run_id() -> str:
@@ -29,6 +32,7 @@ class Logger:
             epoch=None,
             metrics=kwargs
         )
+        self.adapter.write_log_entry(entry)
 
     def log_client_metrics(self, client_id: str, round: int, epoch: int, stage="train", **kwargs):
         entry = LogEntry(
@@ -44,6 +48,10 @@ class Logger:
             epoch=epoch,
             metrics=kwargs
         )
+        self.adapter.write_log_entry(entry)
+
+    def attach(self, adapter: "LoggerAdapter"):
+        self.adapter = adapter
 
 
 class LogEntry:
@@ -73,4 +81,19 @@ class ConsoleAdapter(LoggerAdapter):
         loc = log_entry.client_id if log_entry.log_type == "client" else "server"
         metrics = ", ".join([f"{k}={v}" for k, v in log_entry.metrics.items()])
         print(f"[{log_entry.timestamp} {log_entry.run_id} {loc}] {log_entry.algorithm} {log_entry.model} on\
-         {log_entry.dataset} | r {log_entry.round}, e {log_entry.epoch} | {metrics}")
+{log_entry.dataset} | r {log_entry.round}, e {log_entry.epoch} | {metrics}")
+
+
+class JsonAdapter(LoggerAdapter):
+    def __init__(self, outfile: pathlib.Path):
+        if not outfile.parent.exists():
+            outfile.parent.mkdir(parents=True)
+        elif outfile.exists() and not outfile.is_file():
+            raise FileNotFoundError(f"Output {outfile} is not a file")
+
+        self.outfile = open(outfile, "w")
+
+    def write_log_entry(self, log_entry: "LogEntry"):
+        line = jsonpickle.encode(log_entry, unpicklable=False) + "\n"
+        self.outfile.write(line)
+        self.outfile.flush()

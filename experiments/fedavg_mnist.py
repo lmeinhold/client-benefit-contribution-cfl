@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import torch
 from torch.nn import CrossEntropyLoss
@@ -8,6 +10,7 @@ from torchvision import datasets
 from torchvision.transforms import ToTensor
 
 from federated_learning.fedavg import FedAvg
+from utils.metrics_logging import Logger, JsonAdapter
 from utils.torchutils import get_device
 from models.mnist import CNN
 
@@ -56,6 +59,10 @@ def create_optimizer(params, lr):
 
 
 def main():
+    logger = Logger(algorithm="FedAvg", dataset="MNIST", model="CNN")
+    logger_adapter = JsonAdapter(Path("../output", logger.run_id + ".json"))
+    logger.attach(logger_adapter)
+
     train_data, test_data = load_data()
     client_data_loaders = [create_dataloader(d) for d in split_dataset(train_data, N_CLIENTS)]
 
@@ -67,6 +74,7 @@ def main():
         rounds=ROUNDS,
         epochs=EPOCHS,
         alpha=ALPHA,
+        logger=logger,
         device=get_device(),
         test_data=create_dataloader(test_data)
     )
