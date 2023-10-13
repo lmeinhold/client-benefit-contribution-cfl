@@ -5,5 +5,5 @@
     <option name="pathToExecutable" value="/usr/bin/black" />
     <option name="sdkUUID" value="13471717-c9be-4324-96cb-54eca37d6b4d" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.10 (masterthesis-clustered-fl)" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 (masterthesis-clustered-fl)" project-jdk-type="Python SDK" />
 </project>

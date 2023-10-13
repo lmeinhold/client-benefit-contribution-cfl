@@ -70,9 +70,17 @@ class LogEntry:
         self.metrics = metrics
 
 
+class LogMetadata
+    pass
+
+
 class LoggerAdapter(metaclass=abc.ABCMeta):
     @abc.abstractmethod
     def write_log_entry(self, log_entry: "LogEntry"):
+        raise NotImplemented()
+
+    @abc.abstractmethod
+    def write_metadata(self, meta_entry: "LogMetadata"):
         raise NotImplemented()
 
 

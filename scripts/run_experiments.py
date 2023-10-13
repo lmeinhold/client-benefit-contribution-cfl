@@ -28,6 +28,9 @@ def run_experiments(experiments: str | list[str]):
 if __name__ == "__main__":
     arguments = docopt(__doc__)
 
+    import torch
+    print(f"CUDA available: {torch.cuda.is_available()}")
+
     if arguments["--list"]:
         list_experiments()
     else:
