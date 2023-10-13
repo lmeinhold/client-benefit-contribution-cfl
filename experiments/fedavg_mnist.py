@@ -59,9 +59,10 @@ def create_optimizer(params, lr):
 
 
 def main():
-    logger = Logger(algorithm="FedAvg", dataset="MNIST", model="CNN")
-    logger_adapter = JsonAdapter(Path("../output", logger.run_id + ".json"))
+    logger = Logger(algorithm="FedAvg", dataset="MNIST", model="CNN", rounds=ROUNDS, epochs=EPOCHS)
+    logger_adapter = JsonAdapter(Path("../output"), logger.run_id)
     logger.attach(logger_adapter)
+    logger.log_run_data()
 
     train_data, test_data = load_data()
     client_data_loaders = [create_dataloader(d) for d in split_dataset(train_data, N_CLIENTS)]
