@@ -7,11 +7,11 @@
 docker build -t mcfl:latest .
 
 # Run all experiments
-docker run --rm -v ./output:/usr/src/mcfl/output mcfl:latest
+docker run -it --rm -v ./output:/usr/src/mcfl/output mcfl:latest
 
 # Run specific experiments
-docker run --rm -v ./output:/usr/src/mcfl/output -e MCFL_EXPERIMENTS=fedavg_mnist,ifca_cifar10 mcfl:latest
+docker run -it --rm -v ./output:/usr/src/mcfl/output -e MCFL_EXPERIMENTS=fedavg_mnist,ifca_cifar10 mcfl:latest
 
 # List available experiments
-docker run --rm mcfl:latest scripts/run_experiments.py --list
+docker run -it --rm mcfl:latest scripts/run_experiments.py --list
 ```
