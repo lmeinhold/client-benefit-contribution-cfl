@@ -22,14 +22,14 @@ N_CLUSTERS = 3
 
 def load_data():
     train_data = datasets.MNIST(
-        root='../../data',
+        root='../../datasets',
         train=True,
         transform=ToTensor(),
         target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
         download=True,
     )
     test_data = datasets.MNIST(
-        root='../../data',
+        root='../../datasets',
         train=False,
         transform=ToTensor(),
         target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),

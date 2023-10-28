@@ -21,7 +21,7 @@ class IFCA(FederatedLearningAlgorithm):
                  alpha: float = 0.3, device: str = "cpu", test_data: DataLoader = None):
         """Create a new IFCA instance
             Parameters:
-                client_data: list of DataLoaders holding the data for each client
+                client_data: list of DataLoaders holding the datasets for each client
                 model_fn: a function that returns the model to use on each client
                 optimizer_fn: a function that returns the optimizer to use on each client
                 loss_fn: a loss function to use
@@ -30,7 +30,7 @@ class IFCA(FederatedLearningAlgorithm):
                 k: number of clusters
                 alpha: fraction of clients that are selected for each round
                 device: the torch device to use for training
-                test_data: a DataLoader with test data to evaluate the global models OR k DataLoaders to evaluate each
+                test_data: a DataLoader with test datasets to evaluate the global models OR k DataLoaders to evaluate each
                     client on OR None if no test evaluation should be performed TODO: implement multiple test loaders
         """
         self.client_data = client_data

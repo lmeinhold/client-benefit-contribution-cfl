@@ -4,9 +4,9 @@ from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
 
 from experiments.datasets.base import create_dataloader, split_dataset
-from experiments.datasets.mnist import MNIST
+from experiments.datasets.cifar import CIFAR10
 from federated_learning.fedavg import FedAvg
-from models.mnist import CNN
+from models.cifar import CNN
 from utils.metrics_logging import Logger, JsonAdapter
 from utils.torchutils import get_device
 
@@ -24,12 +24,12 @@ def create_optimizer(params, lr):
 
 
 def main():
-    logger = Logger(algorithm="FedAvg", dataset="MNIST", model="CNN", rounds=ROUNDS, epochs=EPOCHS)
+    logger = Logger(algorithm="FedAvg", dataset="CIFAR10", model="CNN", rounds=ROUNDS, epochs=EPOCHS)
     logger_adapter = JsonAdapter(Path("../output"), logger.run_id)
     logger.attach(logger_adapter)
     logger.log_run_data()
 
-    ds = MNIST("../data")
+    ds = CIFAR10 ("../data")
 
     train_data, test_data = ds.train_data(), ds.test_data()
     client_data_loaders = [create_dataloader(d, batch_size=BATCH_SIZE) for d in split_dataset(train_data, N_CLIENTS)]

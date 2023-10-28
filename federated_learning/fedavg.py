@@ -24,13 +24,13 @@ class FedAvg(FederatedLearningAlgorithm):
         self.global_model = model_fn().to(self.device)
 
     def create_client(self, client_id, data_loader):
-        return FedAvgClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.logger)
+        return FedAvgClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.logger, self.device)
 
     def train_round(self, round):
         global_weights = self.global_model.state_dict()
         weights = []
         n_c = int(np.ceil(self.alpha * len(self.clients)))
-        for c in tqdm(np.random.choice(self.clients, n_c)):
+        for c in tqdm(np.random.choice(self.clients, n_c), position=1, desc="Round", leave=False):
             w_i = c.train_round(global_weights, round, self.epochs)
             weights.append(w_i)
 
@@ -61,8 +61,7 @@ class FedAvg(FederatedLearningAlgorithm):
         return updated_weights
 
     def fit(self):
-        for r in range(self.rounds):
-            print(f"FedAvg round {r + 1} --------------")
+        for r in tqdm(range(self.rounds), position=0, desc="Client"):
             self.train_round(r + 1)
             if self.test_data is not None:
                 self.test_round(r + 1)
