@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm.auto import tqdm
 
 from federated_learning.base import FederatedLearningAlgorithm, FederatedLearningClient
 from utils.metrics_logging import Logger
@@ -30,7 +30,7 @@ class FedAvg(FederatedLearningAlgorithm):
         global_weights = self.global_model.state_dict()
         weights = []
         n_c = int(np.ceil(self.alpha * len(self.clients)))
-        for c in tqdm(np.random.choice(self.clients, n_c), position=1, desc="Round", leave=False):
+        for c in tqdm(np.random.choice(self.clients, n_c), position=1, desc="Clients", leave=False):
             w_i = c.train_round(global_weights, round, self.epochs)
             weights.append(w_i)
 
@@ -61,7 +61,7 @@ class FedAvg(FederatedLearningAlgorithm):
         return updated_weights
 
     def fit(self):
-        for r in tqdm(range(self.rounds), position=0, desc="Client"):
+        for r in tqdm(range(self.rounds), position=0, desc="Round"):
             self.train_round(r + 1)
             if self.test_data is not None:
                 self.test_round(r + 1)

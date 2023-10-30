@@ -4,8 +4,11 @@ from torch import nn
 
 
 class CNN(nn.Module):
-    def __init__(self):
+    def __init__(self, n_output_classes=10):
         super().__init__()
+
+        self.n_output_classes = n_output_classes
+
         self.conv1 = nn.Sequential(
             nn.Conv2d(
                 in_channels=1,
@@ -34,7 +37,7 @@ class CNN(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(120, 84),
             nn.LeakyReLU(),
-            nn.Linear(84, 10))
+            nn.Linear(84, self.n_output_classes))
 
     def forward(self, x):
         x = self.conv1(x)
@@ -44,8 +47,11 @@ class CNN(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, n_output_classes):
         super().__init__()
+
+        self.n_output_classes = n_output_classes
+
         self.m = nn.Sequential(
             nn.Flatten(),
             nn.Linear(28 * 28, 128),
@@ -54,7 +60,7 @@ class MLP(nn.Module):
             nn.Linear(128, 128),
             nn.LeakyReLU(),
             nn.BatchNorm1d(128),
-            nn.Linear(128, 10),
+            nn.Linear(128, self.n_output_classes),
             nn.Softmax()
         )
 

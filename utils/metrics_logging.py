@@ -12,7 +12,7 @@ def _new_run_id() -> str:
 
 
 class Logger:
-    def __init__(self, algorithm, dataset: str, model: str, rounds: int, epochs: int, adapter=None):
+    def __init__(self, algorithm, dataset: str, model: str, rounds: int | None = None, epochs: int | None = None, adapter=None):
         self.algorithm = algorithm
         self.dataset = dataset
         self.model = model
@@ -44,7 +44,7 @@ class Logger:
         )
         self.adapter.write_log_entry(entry)
 
-    def log_client_metrics(self, client_id: str, round: int, epoch: int, stage="train", **kwargs):
+    def log_client_metrics(self, client_id: str, round: int | None = None, epoch: int | None = None, stage="train", **kwargs):
         entry = LogEntry(
             timestamp=datetime.now(),
             log_type="client",

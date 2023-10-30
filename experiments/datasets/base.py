@@ -16,6 +16,17 @@ class Dataset(metaclass=abc.ABCMeta):
         """Return the entire test data for this dataset"""
         raise NotImplemented()
 
+    @abc.abstractmethod
+    def get_name(self) -> str:
+        """Returns a short name for the dataset, e.q. 'MNIST'"""
+        raise NotImplemented()
+
+
+    @abc.abstractmethod
+    def num_classes(self):
+        """Return the number of different class labels that the dataset contains"""
+        raise NotImplemented()
+
 
 def create_dataloader(data, batch_size: int):
     return DataLoader(data, batch_size=batch_size, shuffle=True)

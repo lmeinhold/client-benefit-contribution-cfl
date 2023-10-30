@@ -28,3 +28,9 @@ class MNIST(Dataset):
             target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
             download=True
         )
+
+    def get_name(self) -> str:
+        return "MNIST"
+
+    def num_classes(self):
+        return 10
