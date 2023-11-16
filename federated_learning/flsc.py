@@ -27,7 +27,7 @@ class FLSC(IFCA):
                 alpha: fraction of clients that are selected for each round
                 device: the torch device to use for training
                 test_data: a DataLoader with test datasets to evaluate the global models OR k DataLoaders to evaluate each
-                    client on OR None if no test evaluation should be performed TODO: implement multiple test loaders
+                    client on OR None if no test evaluation should be performed
         """
         self.n = n
         super().__init__(client_data, model_fn, optimizer_fn, loss_fn, rounds, epochs, k, logger, alpha, device,
