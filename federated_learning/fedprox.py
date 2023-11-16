@@ -8,17 +8,21 @@ from utils.torchutils import StateDict
 
 class FedProx(FedAvg):
     def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int,
-                 logger: Logger, mu: float = 0.01, alpha: float = 0.8, device: str = "cpu", test_data: DataLoader = None):
+                 logger: Logger, mu: float = 0.01, alpha: float = 0.8, device: str = "cpu",
+                 test_data: DataLoader = None):
         self.mu = mu
         super().__init__(client_data, model_fn, optimizer_fn, loss_fn, rounds, epochs, alpha, logger, device, test_data)
 
-    def create_client(self, client_id, data_loader):
-        return FedProxClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.logger, self.mu)
+    def create_client(self, client_id, data_loader, test_dataloader=None):
+        return FedProxClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.logger,
+                             self.mu, test_dataloader, self.device)
 
 
 class FedProxClient(FedAvgClient):
-    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, logger, mu: float = 0.01, device="cpu"):
-        super().__init__(client_id, data_loader, model_fn, optimizer_fn, loss_fn, logger=logger, device=device)
+    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, logger, mu: float = 0.01,
+                 test_dataloader: DataLoader = None, device="cpu"):
+        super().__init__(client_id, data_loader, model_fn, optimizer_fn, loss_fn, logger=logger,
+                         test_dataloader=test_dataloader, device=device)
         self.mu = mu
 
     def train_round(self, shared_state: StateDict, round: int, epochs: int):
@@ -61,4 +65,38 @@ class FedProxClient(FedAvgClient):
             self.logger.log_client_metrics(client_id=str(self.client_id), epoch=t, round=round, stage="train",
                                            loss=overall_loss, accuracy=accuracy)
 
-        return model.state_dict()
+        test_loss = None
+        correct = None
+
+        if self.test_dataloader is not None:
+            model.eval()
+
+            overall_loss = 0
+            correct = 0
+
+            with torch.no_grad():
+                for batch, (X, y) in enumerate(self.test_dataloader):
+                    X = X.to(self.device)
+                    y = y.to(self.device)
+
+                    pred = model(X)
+
+                    proximal_term = 0
+                    new_state = model.state_dict()
+                    for k in shared_state.keys():
+                        if not k.endswith("weight") or k.endswith("bias"):
+                            continue
+                        local_weights = new_state[k]
+                        global_weights = shared_state[k]
+                        proximal_term += (local_weights.to("cpu") - global_weights.to("cpu")).norm(2)
+
+                    loss = self.loss_fn(pred, y) + (self.mu / 2.0) * proximal_term
+                    overall_loss += loss.item()
+                    correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+
+                test_loss = overall_loss / len(self.data_loader)
+                test_accuracy = correct / len(self.test_dataloader.dataset)
+                self.logger.log_client_metrics(client_id=str(self.client_id), epoch=None, round=round, stage="test",
+                                               loss=test_loss, accuracy=test_accuracy)
+
+        return model.state_dict(), test_loss, correct
