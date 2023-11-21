@@ -39,7 +39,7 @@ class FLSC(IFCA):
         return FlscClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.n, self.logger,
                           test_dataloader, self.device)
 
-    def train_round(self):
+    def train_round(self, round):
         cluster_weights = [self.cluster_models[i].state_dict() for i in range(self.k)]
         new_weights = []
         num_clients = int(np.ceil(self.alpha * len(self.clients)))

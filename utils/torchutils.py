@@ -25,3 +25,7 @@ def average_state_dicts(state_dicts: list[StateDict], include_biases=True):
     for k, v in updated_dict.items():
         updated_dict[k] = torch.stack(v).mean(dim=0)
     return updated_dict
+
+
+def get_weights(model, biases=True) -> StateDict:
+    return {k: v for k, v in model.state_dict().items() if k.endswith('.weight') or (biases and k.endswith('.bias'))}
