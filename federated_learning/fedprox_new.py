@@ -33,7 +33,7 @@ class FedProx:
         clients_per_round = int(np.floor(self.gamma * n_clients))
 
         model = self.model_class().to(self.device)
-        # model = torch.compile(model=model)
+        model = torch.compile(model=model, mode="reduce-overhead")
         global_weights = get_weights(model)
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
@@ -79,10 +79,11 @@ class FedProx:
         for X, y in client_test_data:
             X, y = X.to(self.device), y.to(self.device)
 
-            pred = model(X)
+            with torch.no_grad():
+                pred = model(X)
 
-            batch_loss = self.loss(pred, y)
-            round_loss += batch_loss
+                batch_loss = self.loss(pred, y)
+                round_loss += batch_loss
 
             batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
             round_correct += batch_correct

@@ -10,7 +10,7 @@ from utils.torchutils import get_device
 
 N_CLIENTS = 100
 GAMMA = 1
-BATCH_SIZE = 32
+BATCH_SIZE = 64
 LR = 2e-3
 EPOCHS = 5
 ROUNDS = 5
@@ -24,7 +24,7 @@ def create_optimizer(params):
 
 
 if __name__ == "__main__":
-    dataset = CIFAR10("../data").train_data()
+    dataset = CIFAR10("data").train_data()
     client_dataloaders = [create_dataloader(ds, BATCH_SIZE) for ds in
                           split_with_label_distribution_skew(dataset, GAMMA, N_CLIENTS)]
 

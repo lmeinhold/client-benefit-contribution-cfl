@@ -29,7 +29,7 @@ class Dataset(metaclass=abc.ABCMeta):
 
 
 def create_dataloader(data, batch_size: int):
-    return DataLoader(data, batch_size=batch_size, shuffle=True)
+    return DataLoader(data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
 def split_dataset(dataset, n):
