@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
-from utils.torchutils import get_weights, average_state_dicts, StateDict
+from utils.torchutils import average_state_dicts, StateDict
 
 
 class FedProx:
@@ -34,7 +34,7 @@ class FedProx:
 
         model = self.model_class().to(self.device)
         model = torch.compile(model=model, mode="reduce-overhead")
-        global_weights = get_weights(model)
+        global_weights = model.named_parameters()
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
             updated_weights = []
@@ -47,15 +47,13 @@ class FedProx:
 
                 client_weights, train_losses = self._train_client_round(global_weights, model, client_train_data)
                 updated_weights.append(client_weights)
-                # print(f"Loss for client {k}: {train_losses}")
 
                 test_loss, test_accuracy = self._test_client_round(model, client_test_data)
-                # print(f"test loss: {test_loss}, test_accuracy: {test_accuracy}")
 
             global_weights = average_state_dicts(updated_weights)
 
     def _train_client_round(self, global_weights, model, client_train_data) -> tuple[StateDict, np.ndarray]:
-        model.load_state_dict(global_weights, strict=False)
+        model.load_state_dict(dict(global_weights), strict=False)
         optimizer = self.optimizer(model.parameters())
 
         model.train()
@@ -63,10 +61,10 @@ class FedProx:
         round_train_losses = []
 
         for e in range(self.epochs):
-            round_train_loss = self.train_epoch(model, optimizer, client_train_data)
+            round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_weights)
             round_train_losses.append(round_train_loss)
 
-        return model.state_dict(), np.array(round_train_losses)
+        return model.named_parameters(), np.array(round_train_losses)
 
     def _test_client_round(self, model, client_test_data):
         n_samples = len(client_test_data.dataset)
@@ -93,18 +91,36 @@ class FedProx:
 
         return round_loss, round_accuracy
 
-    def train_epoch(self, model, optimizer, client_train_data):
+    def _train_epoch(self, model, optimizer, client_train_data, global_weights):
         epoch_loss = 0
 
         for X, y in client_train_data:
             X, y = X.to(self.device), y.to(self.device)
 
             pred = model(X)
-            loss = self.loss(pred, y)
+            # calculate proximal term only if mu != 0 to speed up FedAvg
+            loss = self._proximal_loss(pred, y, global_weights,
+                                       model.named_parameters()) if self.mu != 0 else self.loss(pred, y)
             epoch_loss += loss.item()
 
-            loss.backward()
+            loss.backward(retain_graph=True)
             optimizer.step()
             optimizer.zero_grad()
 
         return epoch_loss / len(client_train_data)
+
+    def _proximal_loss(self, pred, y, old_state, new_state):
+        """Compute the loss including the FedProx proximal term"""
+
+        old_state = dict(old_state)
+        new_state = dict(new_state)
+
+        return self.loss(pred, y) + self._proximal_term(old_state, new_state)
+
+    @torch.compile(mode="reduce-overhead")
+    def _proximal_term(self, old_state, new_state):
+        proximal_term = 0
+        for k in old_state.keys():
+            proximal_term += (new_state[k] - old_state[k]).norm(2)
+
+        return (self.mu / 2.0) * proximal_term

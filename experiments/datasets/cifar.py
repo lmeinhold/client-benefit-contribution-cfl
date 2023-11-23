@@ -4,7 +4,11 @@ from torch.utils import data
 from torchvision import datasets
 from torchvision.transforms import ToTensor, transforms
 
-from experiments.datasets.base import Dataset
+from experiments.datasets.base import Dataset, CachingDataset
+
+
+def _transform_onehot(a):
+    return one_hot(torch.as_tensor(a), num_classes=10).type(torch.FloatTensor)
 
 
 class CIFAR10(Dataset):
@@ -16,22 +20,22 @@ class CIFAR10(Dataset):
         ])
 
     def train_data(self) -> data.Dataset:
-        return datasets.CIFAR10(
+        return CachingDataset(datasets.CIFAR10(
             root=self.save_dir,
             train=True,
             transform=self.transforms,
-            target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
+            target_transform=_transform_onehot,
             download=True,
-        )
+        ))
 
     def test_data(self) -> data.Dataset:
-        return datasets.CIFAR10(
+        return CachingDataset(datasets.CIFAR10(
             root=self.save_dir,
             train=False,
             transform=self.transforms,
-            target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
+            target_transform=_transform_onehot,
             download=True
-        )
+        ))
 
     def get_name(self) -> str:
         return "CIFAR10"

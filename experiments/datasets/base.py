@@ -21,7 +21,6 @@ class Dataset(metaclass=abc.ABCMeta):
         """Returns a short name for the dataset, e.q. 'MNIST'"""
         raise NotImplemented()
 
-
     @abc.abstractmethod
     def num_classes(self):
         """Return the number of different class labels that the dataset contains"""
@@ -35,3 +34,20 @@ def create_dataloader(data, batch_size: int):
 def split_dataset(dataset, n):
     """Split a dataset into n parts of equal length"""
     return random_split(dataset=dataset, lengths=np.repeat(int(len(dataset) / n), n))
+
+
+class CachingDataset(data.Dataset):
+    """A wrapper for torch Datasets that caches transformations"""
+    def __init__(self, source_dataset):
+        self.source_dataset = source_dataset
+        self.cache = {}
+        self.targets = source_dataset.targets
+        self.data = source_dataset.data
+
+    def __len__(self):
+        return self.source_dataset.__len__()
+
+    def __getitem__(self, index):
+        if index not in self.cache:
+            self.cache[index] = self.source_dataset.__getitem__(index)
+        return self.cache[index]

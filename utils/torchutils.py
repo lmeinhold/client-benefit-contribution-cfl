@@ -15,7 +15,8 @@ StateDict = dict[str, torch.Tensor]
 
 def average_state_dicts(state_dicts: list[StateDict], include_biases=True):
     updated_dict = {}
-    for state_dict in state_dicts:
+    for state_gen in state_dicts:
+        state_dict = dict(state_gen)
         for k in state_dict.keys():
             if k.endswith('.weight') or (include_biases and k.endswith('.bias')):
                 if k in updated_dict:

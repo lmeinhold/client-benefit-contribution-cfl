@@ -13,9 +13,9 @@ GAMMA = 1
 BATCH_SIZE = 64
 LR = 2e-3
 EPOCHS = 5
-ROUNDS = 5
+ROUNDS = 3
 ALPHA = 0.9
-MU = 0
+MU = 1
 MODEL = CNN
 
 
