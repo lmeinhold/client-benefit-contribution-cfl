@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 from torch.utils.data import Dataset, random_split, Subset
 
 SEED = 42
@@ -61,10 +62,23 @@ def split_with_label_distribution_skew(dataset: Dataset, alpha: float, n_clients
     return [Subset(dataset, indices) for indices in batch_indices]
 
 
-def apply_minimum_num_of_samples(batch_indices, n_clients, min: int = 5):
+def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 7):
     largest_client_index = np.argmax([len(x) for x in batch_indices])
     for j in range(n_clients):
-        if len(batch_indices[j]) < min:
-            transfer = min - len(batch_indices[j])
+        if len(batch_indices[j]) < min_size:
+            transfer = min_size - len(batch_indices[j])
             batch_indices[j].extend(batch_indices[largest_client_index][-transfer:])
             batch_indices[largest_client_index] = batch_indices[largest_client_index][:-transfer]
+
+
+def train_test_split(datasets, p_test=0.2, seed=17):
+    """Split a list of datasets into a list of train datasets and a list of test datasets"""
+    generator = torch.Generator().manual_seed(seed)
+
+    train_sets = []
+    test_sets = []
+    for ds in datasets:
+        train, test = random_split(ds, [(1 - p_test), p_test], generator=generator)
+        train_sets.append(train)
+        test_sets.append(test)
+    return train_sets, test_sets

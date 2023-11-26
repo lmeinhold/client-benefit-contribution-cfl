@@ -2,6 +2,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
+from utils.results_writer import ResultsWriter
 from utils.torchutils import average_state_dicts, StateDict
 
 
@@ -23,6 +24,7 @@ class FedProx:
         self.gamma = gamma
         self.mu = mu
         self.device = device
+        self.results = ResultsWriter()
 
     def fit(self, train_data, test_data):
         n_clients = len(train_data)
@@ -31,26 +33,56 @@ class FedProx:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
         clients_per_round = int(np.floor(self.gamma * n_clients))
+        print(clients_per_round)
 
         model = self.model_class().to(self.device)
         model = torch.compile(model=model, mode="reduce-overhead")
         global_weights = model.named_parameters()
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
+            self.results.write(round=t)
+            round_train_losses = []
+            round_test_losses = []
+            round_test_accuracies = []
             updated_weights = []
 
             chosen_client_indices = np.random.choice(np.arange(n_clients), size=clients_per_round)
 
-            for k in tqdm(chosen_client_indices, desc="Client", position=1, leave=False):
-                client_train_data = train_data[k]
-                client_test_data = test_data[k] if isinstance(test_data, list) else test_data
+            for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
+                if k in chosen_client_indices:
+                    client_train_data = train_data[k]
+                    client_test_data = test_data[k] if isinstance(test_data, list) else test_data
 
-                client_weights, train_losses = self._train_client_round(global_weights, model, client_train_data)
-                updated_weights.append(client_weights)
+                    client_weights, train_loss = self._train_client_round(global_weights, model, client_train_data)
+                    round_train_losses.append(train_loss.mean())
+                    updated_weights.append(client_weights)
 
-                test_loss, test_accuracy = self._test_client_round(model, client_test_data)
+                    test_loss, test_accuracy = self._test_client_round(model, client_test_data)
+                    round_test_losses.append(test_loss)
+                    round_test_accuracies.append(test_accuracy)
+
+                    logs = {
+                        f"client{k}_train_loss": train_loss.mean(),
+                        f"client{k}_test_loss": test_loss,
+                        f"client{k}_test_accuracy": test_accuracy
+                    }
+                    self.results.write(**logs)
+                else:
+                    logs = {
+                        f"client{k}_train_loss": np.nan,
+                        f"client{k}_test_loss": np.nan,
+                        f"client{k}_test_accuracy": np.nan,
+                    }
+                    self.results.write(**logs)
+
 
             global_weights = average_state_dicts(updated_weights)
+
+            self.results.write(average_train_loss=np.mean(round_train_losses),
+                               average_test_loss=np.mean(round_test_losses),
+                               average_test_accuracy=np.mean(round_test_accuracies))
+
+        return self.results
 
     def _train_client_round(self, global_weights, model, client_train_data) -> tuple[StateDict, np.ndarray]:
         model.load_state_dict(dict(global_weights), strict=False)
@@ -81,9 +113,9 @@ class FedProx:
                 pred = model(X)
 
                 batch_loss = self.loss(pred, y)
-                round_loss += batch_loss
+                round_loss += batch_loss.cpu().item()
 
-            batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+            batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().cpu().item()
             round_correct += batch_correct
 
         round_loss /= len(client_test_data)
@@ -101,7 +133,7 @@ class FedProx:
             # calculate proximal term only if mu != 0 to speed up FedAvg
             loss = self._proximal_loss(pred, y, global_weights,
                                        model.named_parameters()) if self.mu != 0 else self.loss(pred, y)
-            epoch_loss += loss.item()
+            epoch_loss += loss.cpu().item()
 
             loss.backward(retain_graph=True)
             optimizer.step()
@@ -123,4 +155,7 @@ class FedProx:
         for k in old_state.keys():
             proximal_term += (new_state[k] - old_state[k]).norm(2)
 
-        return (self.mu / 2.0) * proximal_term
+        proximal_term = (self.mu / 2.0) * proximal_term
+        # self.results.write(proximal_term=proximal_term)
+
+        return proximal_term

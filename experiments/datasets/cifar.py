@@ -16,7 +16,7 @@ class CIFAR10(Dataset):
         self.save_dir = save_dir
         self.transforms = transforms.Compose([
             transforms.ToTensor(),
-            # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
 
     def train_data(self) -> data.Dataset:

@@ -4,7 +4,7 @@ from torch.utils import data
 from torchvision import datasets
 from torchvision.transforms import ToTensor
 
-from experiments.datasets.base import Dataset
+from experiments.datasets.base import Dataset, CachingDataset
 
 
 class MNIST(Dataset):
@@ -12,22 +12,22 @@ class MNIST(Dataset):
         self.save_dir = save_dir
 
     def train_data(self) -> data.Dataset:
-        return datasets.MNIST(
+        return CachingDataset(datasets.MNIST(
             root=self.save_dir,
             train=True,
             transform=ToTensor(),
             target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
             download=True,
-        )
+        ))
 
     def test_data(self) -> data.Dataset:
-        return datasets.MNIST(
+        return CachingDataset(datasets.MNIST(
             root=self.save_dir,
             train=False,
             transform=ToTensor(),
             target_transform=lambda y: one_hot(torch.tensor(y), 10).type(torch.FloatTensor),
             download=True
-        )
+        ))
 
     def get_name(self) -> str:
         return "MNIST"
