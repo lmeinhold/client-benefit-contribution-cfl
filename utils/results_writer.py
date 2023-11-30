@@ -1,30 +1,20 @@
 import pandas as pd
-import torch
 
 
 class ResultsWriter:
     def __init__(self):
-        self.metrics = {}
+        self.metrics = []
 
-    def write(self, **kwargs) -> "ResultsWriter":
+    def write(self, round: int, client: str, stage: str, **kwargs) -> "ResultsWriter":
         for k, v in kwargs.items():
-            self._write_single_metric(k, v)
+            self._write_single_metric(round, client, stage, k, v)
         return self
 
-    def _write_single_metric(self, name: str, value):
-        if name in self.metrics:
-            self.metrics[name].append(value)
-        else:
-            try:
-                if isinstance(value, torch.Tensor) and value.get_device() >= 0:
-                    print(f"WARNING! value {value} for key {name} is on gpu!")
-            except:
-                pass
-
-            self.metrics[name] = [value]
+    def _write_single_metric(self, round: int, client: str, stage: str, name: str, value):
+        self.metrics.append([round, client, stage, name, value])
 
     def as_dataframe(self):
-        return pd.DataFrame(self.metrics)
+        return pd.DataFrame(self.metrics, columns=["round", "client", "stage", "variable", "value"])
 
     def save(self, path):
         df = self.as_dataframe()

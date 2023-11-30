@@ -33,17 +33,12 @@ class FedProx:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
         clients_per_round = int(np.floor(self.gamma * n_clients))
-        print(clients_per_round)
 
         model = self.model_class().to(self.device)
         model = torch.compile(model=model, mode="reduce-overhead")
         global_weights = model.named_parameters()
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
-            self.results.write(round=t)
-            round_train_losses = []
-            round_test_losses = []
-            round_test_accuracies = []
             updated_weights = []
 
             chosen_client_indices = np.random.choice(np.arange(n_clients), size=clients_per_round)
@@ -54,33 +49,23 @@ class FedProx:
                     client_test_data = test_data[k] if isinstance(test_data, list) else test_data
 
                     client_weights, train_loss = self._train_client_round(global_weights, model, client_train_data)
-                    round_train_losses.append(train_loss.mean())
-                    updated_weights.append(client_weights)
 
                     test_loss, test_accuracy = self._test_client_round(model, client_test_data)
-                    round_test_losses.append(test_loss)
-                    round_test_accuracies.append(test_accuracy)
 
-                    logs = {
-                        f"client{k}_train_loss": train_loss.mean(),
-                        f"client{k}_test_loss": test_loss,
-                        f"client{k}_test_accuracy": test_accuracy
-                    }
-                    self.results.write(**logs)
-                else:
-                    logs = {
-                        f"client{k}_train_loss": np.nan,
-                        f"client{k}_test_loss": np.nan,
-                        f"client{k}_test_accuracy": np.nan,
-                    }
-                    self.results.write(**logs)
-
+                    self.results.write(
+                        round=t,
+                        client=str(k),
+                        stage="train",
+                        loss=train_loss.mean()
+                    ).write(
+                        round=t,
+                        client=str(k),
+                        stage="test",
+                        loss=test_loss,
+                        accuracy=test_accuracy
+                    )
 
             global_weights = average_state_dicts(updated_weights)
-
-            self.results.write(average_train_loss=np.mean(round_train_losses),
-                               average_test_loss=np.mean(round_test_losses),
-                               average_test_accuracy=np.mean(round_test_accuracies))
 
         return self.results
 
