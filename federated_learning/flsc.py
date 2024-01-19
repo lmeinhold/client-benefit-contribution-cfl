@@ -1,125 +1,193 @@
 import numpy as np
 import torch
-from numpy import signedinteger
-from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from federated_learning.ifca import IFCA, IfcaClient
-from utils.metrics_logging import Logger
-from utils.torchutils import StateDict, average_state_dicts
+from utils.results_writer import ResultsWriter
+from utils.torchutils import average_state_dicts, StateDict
 
 
-class FLSC(IFCA):
-    """Federated Learning with Soft Clustering (FLSC)"""
-
-    def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int, k: int,
-                 n: int, logger: Logger, alpha: float = 0.3, device: str = "cpu", test_data: DataLoader = None):
-        """Create a new IFCA instance
-            Parameters:
-                client_data: list of DataLoaders holding the datasets for each client
-                model_fn: a function that returns the model to use on each client
-                optimizer_fn: a function that returns the optimizer to use on each client
-                loss_fn: a loss function to use
-                rounds: number of federated learning rounds
-                epochs: number of epochs on each client per federated learning roundzo
-                k: number of cluster models
-                n: number of clusters each client is assigned to
-                alpha: fraction of clients that are selected for each round
-                device: the torch device to use for training
-                test_data: a DataLoader with test datasets to evaluate the global models OR k DataLoaders to evaluate each
-                    client on OR None if no test evaluation should be performed
-        """
-        self.n = n
-        super().__init__(client_data, model_fn, optimizer_fn, loss_fn, rounds, epochs, k, logger, alpha, device,
-                         test_data)
-        self.cluster_estimates = np.array([np.random.randint(low=0, high=k, size=n) for _ in
-                                           range(len(client_data))])  # initial random cluster assignments
-
-    def create_client(self, client_id, data_loader, test_dataloader) -> "FlscClient":
-        return FlscClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.n, self.logger,
-                          test_dataloader, self.device)
-
-    def train_round(self, round):
-        cluster_weights = [self.cluster_models[i].state_dict() for i in range(self.k)]
-        new_weights = []
-        num_clients = int(np.ceil(self.alpha * len(self.clients)))
-        client_choices = np.random.choice(range(len(self.clients)), size=num_clients)
-        old_cluster_estimates = self.cluster_estimates.copy()
-
-        losses = 0
-        corrects = 0
-        samples = 0
-
-        for i in tqdm(client_choices):
-            c_i = self.clients[i]
-            w_i, alpha_k, test_loss, test_correct = c_i.train_round(cluster_weights, old_cluster_estimates[i],
-                                                                    self.epochs)
-            new_weights.append(w_i)
-            self.cluster_estimates[i] = alpha_k
-
-            if test_loss is not None:
-                n = len(c_i.test_dataloader.dataset)
-                losses += test_loss * n
-                corrects += test_correct
-                samples += n
-
-        if samples > 0:
-            weighted_client_loss = losses / samples
-            weighted_client_accuracy = corrects / samples
-            self.logger.log_server_metrics(round, stage="test", accuracy=weighted_client_accuracy,
-                                           loss=weighted_client_loss)
-
-        updated_weights = self.aggregate_weights(new_weights, old_cluster_estimates[client_choices])
-        self.cluster_estimates = np.array(self.cluster_estimates, dtype=int)
-        for i, w_i in enumerate(updated_weights):
-            self.cluster_models[i].load_state_dict(w_i, strict=False)
-
-    def aggregate_weights(self, weights, cluster_estimates) -> list[StateDict]:
-        updated_cluster_weights = [[] for _ in range(self.k)]
-        for j in range(self.k):
-            for i, estimate in enumerate(cluster_estimates):
-                if j in estimate:
-                    theta_ij = weights[i]
-                    updated_cluster_weights[j].append(theta_ij)
-
-        aggregated_cluster_weights = [average_state_dicts(updated_cluster_weights[j]) for j in range(self.k)]
-        return aggregated_cluster_weights
+def _fuse_model_weights(global_weights: list[StateDict], cluster_identities):
+    return average_state_dicts([global_weights[c] for c in cluster_identities])
 
 
-def fuse_weights(state_dicts: list[StateDict]) -> StateDict:
-    return average_state_dicts(state_dicts)
+class FLSC:
+    """Federate Learning with Soft-Clustering (FLSC)
+    Equivalent to Iterative Federated Clustering Algorithm (IFCA) if `clusters_per_client` is set to 1"""
 
+    def __init__(self,
+                 model_class,
+                 loss,
+                 optimizer,
+                 rounds: int,
+                 epochs: int,
+                 n_clusters: int,
+                 clusters_per_client: int = 1,
+                 clients_per_round: int | float = 1.0,
+                 device="cpu"):
+        self.model_class = model_class
+        self.loss = loss
+        self.optimizer = optimizer
+        self.rounds = rounds
+        self.epochs = epochs
+        self.n_clusters = n_clusters
+        self.clusters_per_client = clusters_per_client
+        self.clients_per_round = clients_per_round
+        self.device = device
+        self.results = ResultsWriter()
 
-class FlscClient(IfcaClient):
-    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, n: int, logger: Logger,
-                 test_dataloader: DataLoader = None, device="cpu"):
-        super().__init__(client_id, data_loader, model_fn, optimizer_fn, loss_fn, logger, test_dataloader, device)
-        self.n = n
+    def fit(self, train_data, test_data):
+        n_clients = len(train_data)
+        train_dataset_sizes = np.asarray([len(dl.dataset) for dl in train_data])
 
-    def train_round(self, cluster_states: [StateDict], cluster_assignments: np.ndarray, epochs: int) -> tuple[
-        StateDict, np.array]:
-        new_cluster_assignments = self.estimate_cluster(cluster_states)
+        if isinstance(test_data, list) and len(test_data) != n_clients:
+            raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
-        model = self.build_model([cluster_states[i] for i in cluster_assignments])
-        optimizer = self.build_optimizer(model)
+        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients)) \
+            if isinstance(self.clients_per_round, float) else self.clients_per_round
 
-        self.train_epochs(epochs, model, optimizer)
+        print(f"Training {eff_clients_per_round} per round")
 
-        test_loss = None
-        test_correct = None
+        # initial model weights
+        global_weights = [self.model_class().state_dict() for _ in
+                          range(self.n_clusters)]  # copy global weights before models are (re-)used
+        model = self.model_class().to(self.device)
+        # model = torch.compile(model=model, mode="reduce-overhead")
 
-        if self.test_dataloader is not None:
-            test_loss, test_correct = self.test_round(model, round)
+        # inital cluster identities
+        cluster_identities = np.random.choice(np.arange(self.n_clusters), size=[n_clients, self.clusters_per_client])
 
-        return model.state_dict(), new_cluster_assignments, test_loss, test_correct
+        for t in tqdm(np.arange(self.rounds), desc="Round", position=0):
+            updated_weights = []
 
-    def estimate_cluster(self, cluster_states: list[StateDict]) -> list[signedinteger]:
-        losses = self.evaluate_losses(cluster_states)
-        return losses.argpartition(self.n)[0:self.n]
+            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
 
-    def build_model(self, state_dicts: list[StateDict] | StateDict) -> torch.nn.Module:
-        if isinstance(state_dicts, list):
-            state_dict = fuse_weights(state_dicts)
-            return super().build_model(state_dict)
-        else:
-            return super().build_model(state_dicts)
+            for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
+                if k in chosen_client_indices:
+                    client_train_data = train_data[k]
+                    client_test_data = test_data[k] if isinstance(test_data, list) else test_data
+
+                    if t > 0:
+                        cluster_identities[k] = self._update_cluster_identity_estimates(global_weights, model,
+                                                                                        client_train_data)
+
+                    client_weights, train_loss = self._train_client_round(global_weights, model, cluster_identities[k],
+                                                                          client_train_data)
+
+                    test_loss, test_accuracy = self._test_client_round(model, client_test_data)
+
+                    self.results.write(
+                        round=t,
+                        client=str(k),
+                        stage="train",
+                        loss=train_loss.mean(),
+                        cluster_identities=cluster_identities[k],
+                    ).write(
+                        round=t,
+                        client=str(k),
+                        stage="test",
+                        loss=test_loss,
+                        accuracy=test_accuracy,
+                        cluster_identities=cluster_identities[k],
+                    )
+
+                    updated_weights.append(client_weights)
+
+            global_weights = self._aggregate_cluster_weights(global_weights, updated_weights, chosen_client_indices,
+                                                             train_dataset_sizes, cluster_identities)
+
+        return self.results
+
+    def _train_client_round(self, global_weights: list[StateDict], model, cluster_identities, client_train_data) -> \
+            tuple[
+                StateDict, np.ndarray]:
+
+        fused_weights = _fuse_model_weights(global_weights, cluster_identities)
+
+        model.load_state_dict(fused_weights, strict=False)
+        optimizer = self.optimizer(model.parameters())
+
+        model.train()
+
+        round_train_losses = []
+
+        for e in range(self.epochs):
+            round_train_loss = self._train_epoch(model, optimizer, client_train_data)
+            round_train_losses.append(round_train_loss)
+
+        return model.state_dict(), np.array(round_train_losses)
+
+    def _update_cluster_identity_estimates(self, global_weights, model, client_train_data) -> np.ndarray:
+        cluster_losses = []
+        for c in range(self.n_clusters):
+            model.load_state_dict(dict(global_weights[c]), strict=False)
+            model.eval()
+
+            loss = 0
+            for X, y in client_train_data:
+                X, y = X.to(self.device), y.to(self.device)
+
+                with torch.no_grad():
+                    pred = model(X)
+                    loss += self.loss(pred, y).cpu().item()
+
+            cluster_losses.append(loss / len(client_train_data))
+
+        new_identities = np.argsort(cluster_losses)[:self.clusters_per_client]
+        return new_identities
+
+    def _test_client_round(self, model, client_test_data):
+        n_samples = len(client_test_data.dataset)
+
+        round_loss = 0
+        round_correct = 0
+
+        model.eval()
+
+        for X, y in client_test_data:
+            X, y = X.to(self.device), y.to(self.device)
+
+            with torch.no_grad():
+                pred = model(X)
+
+                batch_loss = self.loss(pred, y)
+                round_loss += batch_loss.cpu().item()
+
+            batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().cpu().item()
+            round_correct += batch_correct
+
+        round_loss /= len(client_test_data)
+        round_accuracy = round_correct / n_samples
+
+        return round_loss, round_accuracy
+
+    def _train_epoch(self, model, optimizer, client_train_data):
+        epoch_loss = 0
+
+        for X, y in client_train_data:
+            X, y = X.to(self.device), y.to(self.device)
+
+            pred = model(X)
+            loss = self.loss(pred, y)
+            epoch_loss += loss.cpu().item()
+
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+        return epoch_loss / len(client_train_data)
+
+    def _aggregate_cluster_weights(self, old_weights, updated_weights, chosen_client_identities, dataset_sizes,
+                                   cluster_identities) -> list[StateDict]:
+        updated_cluster_weights = []
+        for c in range(self.n_clusters):
+            relevant_clients = [k for k in chosen_client_identities if c in cluster_identities[k, :]]
+            if len(relevant_clients) == 0:
+                updated_cluster_weights.append(old_weights[c])
+            else:
+                relevant_weights = [updated_weights[i] for i, k in enumerate(chosen_client_identities) if c in cluster_identities[k, :]]
+                n_relevant_data_points = dataset_sizes[relevant_clients].sum()
+                dataset_weights = np.asarray([dataset_sizes[k] / n_relevant_data_points for k in relevant_clients])
+
+                updated_cluster_weights.append(average_state_dicts(relevant_weights, weights=dataset_weights))
+
+        return updated_cluster_weights

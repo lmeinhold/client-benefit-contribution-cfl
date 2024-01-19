@@ -4,7 +4,7 @@ from torch.optim import AdamW
 from experiments.datasets.base import create_dataloader
 from experiments.datasets.cifar import CIFAR10
 from experiments.datasets.imbalancing import split_with_label_distribution_skew
-from federated_learning.fedprox_new import FedProx
+from federated_learning.fedprox import FedProx
 from models.cifar import CNN
 from utils.torchutils import get_device
 from datetime import datetime
@@ -15,8 +15,8 @@ N_CLIENTS = 100
 GAMMA = [0.1, 0.5, 1, 5, 10]
 BATCH_SIZE = 64
 LR = 2e-3
-EPOCHS = 5
-ROUNDS = 10
+EPOCHS = 3
+ROUNDS = 5
 ALPHA = 0.9
 MU = [0.1, 1, 10]
 MODEL = CNN
@@ -33,12 +33,12 @@ def run_fedprox(model, rounds, epochs, gamma, mu, train_loader, test_loaders):
         optimizer=create_optimizer,
         rounds=rounds,
         epochs=epochs,
-        gamma=gamma,
+        clients_per_round=gamma,
         mu=mu,
         device=get_device()
     )
 
-    return fedprox.fit(client_dataloaders, client_dataloaders)
+    return fedprox.fit(train_loader, test_loaders)
 
 
 if __name__ == "__main__":

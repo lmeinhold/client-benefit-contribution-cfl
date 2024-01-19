@@ -1,102 +1,149 @@
+import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
-from federated_learning.fedavg import FedAvg, FedAvgClient
-from utils.metrics_logging import Logger
-from utils.torchutils import StateDict
+from utils.results_writer import ResultsWriter
+from utils.torchutils import average_state_dicts, StateDict
 
 
-class FedProx(FedAvg):
-    def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, rounds: int, epochs: int,
-                 logger: Logger, mu: float = 0.01, alpha: float = 0.8, device: str = "cpu",
-                 test_data: DataLoader = None):
+class FedProx:
+    def __init__(self,
+                 model_class,
+                 loss,
+                 optimizer,
+                 rounds: int,
+                 epochs: int,
+                 clients_per_round: int | float = 1.0,
+                 mu: float = 0.0,
+                 device="cpu"):
+        self.model_class = model_class
+        self.loss = loss
+        self.optimizer = optimizer
+        self.rounds = rounds
+        self.epochs = epochs
+        self.clients_per_round = clients_per_round
         self.mu = mu
-        super().__init__(client_data, model_fn, optimizer_fn, loss_fn, rounds, epochs, alpha, logger, device, test_data)
+        self.device = device
+        self.results = ResultsWriter()
 
-    def create_client(self, client_id, data_loader, test_dataloader=None):
-        return FedProxClient(client_id, data_loader, self.model_fn, self.optimizer_fn, self.loss_fn, self.logger,
-                             self.mu, test_dataloader, self.device)
+    def fit(self, train_data, test_data):
+        n_clients = len(train_data)
 
+        if isinstance(test_data, list) and len(test_data) != n_clients:
+            raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
-class FedProxClient(FedAvgClient):
-    def __init__(self, client_id: int, data_loader, model_fn, optimizer_fn, loss_fn, logger, mu: float = 0.01,
-                 test_dataloader: DataLoader = None, device="cpu"):
-        super().__init__(client_id, data_loader, model_fn, optimizer_fn, loss_fn, logger=logger,
-                         test_dataloader=test_dataloader, device=device)
-        self.mu = mu
+        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients)) if isinstance(self.clients_per_round,
+                                                                                                float) else self.clients_per_round
 
-    def train_round(self, shared_state: StateDict, round: int, epochs: int):
-        model = self.build_model(shared_state).to(self.device)
-        optimizer = self.build_optimizer(model)
+        model = self.model_class().to(self.device)
+        model = torch.compile(model=model, mode="reduce-overhead")
+        global_weights = model.named_parameters()
 
-        for t in range(epochs):
-            size = len(self.data_loader)
+        for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
+            updated_weights = []
 
-            model.train()
+            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round)
 
-            overall_loss = 0
-            correct = 0
+            for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
+                if k in chosen_client_indices:
+                    client_train_data = train_data[k]
+                    client_test_data = test_data[k] if isinstance(test_data, list) else test_data
 
-            for batch, (X, y) in enumerate(self.data_loader):
-                X = X.to(self.device)
-                y = y.to(self.device)
+                    client_weights, train_loss = self._train_client_round(global_weights, model, client_train_data)
 
-                pred = model(X)
+                    test_loss, test_accuracy = self._test_client_round(model, client_test_data)
 
-                proximal_term = 0
-                new_state = model.state_dict()
-                for k in shared_state.keys():
-                    if not k.endswith("weight") or k.endswith("bias"):
-                        continue
-                    local_weights = new_state[k]
-                    global_weights = shared_state[k]
-                    proximal_term += (local_weights.to("cpu") - global_weights.to("cpu")).norm(2)
+                    self.results.write(
+                        round=t,
+                        client=str(k),
+                        stage="train",
+                        loss=train_loss.mean()
+                    ).write(
+                        round=t,
+                        client=str(k),
+                        stage="test",
+                        loss=test_loss,
+                        accuracy=test_accuracy
+                    )
 
-                loss = self.loss_fn(pred, y) + (self.mu / 2.0) * proximal_term
-                overall_loss += loss.item()
-                correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+                    updated_weights.append(client_weights)
 
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
+            global_weights = average_state_dicts(updated_weights)
 
-            overall_loss /= len(self.data_loader)
-            accuracy = correct / len(self.data_loader.dataset)
-            self.logger.log_client_metrics(client_id=str(self.client_id), epoch=t, round=round, stage="train",
-                                           loss=overall_loss, accuracy=accuracy)
+        return self.results
 
-        test_loss = None
-        correct = None
+    def _train_client_round(self, global_weights, model, client_train_data) -> tuple[StateDict, np.ndarray]:
+        model.load_state_dict(dict(global_weights), strict=False)
+        optimizer = self.optimizer(model.parameters())
 
-        if self.test_dataloader is not None:
-            model.eval()
+        model.train()
 
-            overall_loss = 0
-            correct = 0
+        round_train_losses = []
+
+        for e in range(self.epochs):
+            round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_weights)
+            round_train_losses.append(round_train_loss)
+
+        return model.named_parameters(), np.array(round_train_losses)
+
+    def _test_client_round(self, model, client_test_data):
+        n_samples = len(client_test_data.dataset)
+
+        round_loss = 0
+        round_correct = 0
+
+        model.eval()
+
+        for X, y in client_test_data:
+            X, y = X.to(self.device), y.to(self.device)
 
             with torch.no_grad():
-                for batch, (X, y) in enumerate(self.test_dataloader):
-                    X = X.to(self.device)
-                    y = y.to(self.device)
+                pred = model(X)
 
-                    pred = model(X)
+                batch_loss = self.loss(pred, y)
+                round_loss += batch_loss.cpu().item()
 
-                    proximal_term = 0
-                    new_state = model.state_dict()
-                    for k in shared_state.keys():
-                        if not k.endswith("weight") or k.endswith("bias"):
-                            continue
-                        local_weights = new_state[k]
-                        global_weights = shared_state[k]
-                        proximal_term += (local_weights.to("cpu") - global_weights.to("cpu")).norm(2)
+            batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().cpu().item()
+            round_correct += batch_correct
 
-                    loss = self.loss_fn(pred, y) + (self.mu / 2.0) * proximal_term
-                    overall_loss += loss.item()
-                    correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+        round_loss /= len(client_test_data)
+        round_accuracy = round_correct / n_samples
 
-                test_loss = overall_loss / len(self.data_loader)
-                test_accuracy = correct / len(self.test_dataloader.dataset)
-                self.logger.log_client_metrics(client_id=str(self.client_id), epoch=None, round=round, stage="test",
-                                               loss=test_loss, accuracy=test_accuracy)
+        return round_loss, round_accuracy
 
-        return model.state_dict(), test_loss, correct
+    def _train_epoch(self, model, optimizer, client_train_data, global_weights):
+        epoch_loss = 0
+
+        for X, y in client_train_data:
+            X, y = X.to(self.device), y.to(self.device)
+
+            pred = model(X)
+            # calculate proximal term only if mu != 0 to speed up FedAvg
+            loss = self._proximal_loss(pred, y, global_weights,
+                                       model.named_parameters()) if self.mu != 0 else self.loss(pred, y)
+            epoch_loss += loss.cpu().item()
+
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            optimizer.zero_grad()
+
+        return epoch_loss / len(client_train_data)
+
+    def _proximal_loss(self, pred, y, old_state, new_state):
+        """Compute the loss including the FedProx proximal term"""
+
+        old_state = dict(old_state)
+        new_state = dict(new_state)
+
+        return self.loss(pred, y) + self._proximal_term(old_state, new_state)
+
+    @torch.compile(mode="reduce-overhead")
+    def _proximal_term(self, old_state, new_state):
+        proximal_term = 0
+        for k in old_state.keys():
+            proximal_term += (new_state[k] - old_state[k]).norm(2)
+
+        proximal_term = (self.mu / 2.0) * proximal_term
+        # self.results.write(proximal_term=proximal_term)
+
+        return proximal_term

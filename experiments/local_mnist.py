@@ -5,8 +5,6 @@ from torch.optim import SGD
 
 from experiments.datasets.base import create_dataloader, split_dataset
 from experiments.datasets.emnist import EMNIST
-from experiments.datasets.mnist import MNIST
-from federated_learning.fedavg import FedAvg
 from federated_learning.local import LocalModels
 from models.mnist import CNN
 from utils.metrics_logging import Logger, JsonAdapter
