@@ -30,7 +30,7 @@ def average_state_dicts(state_dicts: list[StateDict], include_biases=True, weigh
                     updated_dict[k] = [state_dict[k]]
     for k, v in updated_dict.items():
         assert len(v) == len(weights), f"Length of state_dicts does not match length of weights for key {k}"
-        updated_dict[k] = torch.stack([v[i] * weights[i] for i in range(len(v))]).mean(dim=0)
+        updated_dict[k] = torch.stack([v[i] * weights[i] for i in range(len(v))]).sum(dim=0) / weights.sum()
     return updated_dict
 
 

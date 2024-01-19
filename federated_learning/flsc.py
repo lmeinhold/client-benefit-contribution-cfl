@@ -45,8 +45,6 @@ class FLSC:
         eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients)) \
             if isinstance(self.clients_per_round, float) else self.clients_per_round
 
-        print(f"Training {eff_clients_per_round} per round")
-
         # initial model weights
         global_weights = [self.model_class().state_dict() for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
@@ -184,10 +182,18 @@ class FLSC:
             if len(relevant_clients) == 0:
                 updated_cluster_weights.append(old_weights[c])
             else:
-                relevant_weights = [updated_weights[i] for i, k in enumerate(chosen_client_identities) if c in cluster_identities[k, :]]
-                n_relevant_data_points = dataset_sizes[relevant_clients].sum()
-                dataset_weights = np.asarray([dataset_sizes[k] / n_relevant_data_points for k in relevant_clients])
+                relevant_weights = [updated_weights[i] for i, k in enumerate(chosen_client_identities) if
+                                    c in cluster_identities[k, :]]
+                dataset_weights = dataset_sizes[relevant_clients]
 
                 updated_cluster_weights.append(average_state_dicts(relevant_weights, weights=dataset_weights))
 
         return updated_cluster_weights
+
+
+def weight_norms(weights1, weights2):
+    sum = 0
+    for k in weights1.keys():
+        if k.endswith(".weight"):
+            sum += torch.norm(weights1[k].to("cpu") - weights2[k].to("cpu"))
+    return sum
