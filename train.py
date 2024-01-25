@@ -26,10 +26,12 @@ Options:
     --version                                   Show version
     -h --help                                   Show this screen
 """
+import json
 import logging
 import sys
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 
 from docopt import docopt
 
@@ -137,41 +139,42 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, client
         raise Exception(f"Unknown algorithm '{algorithm}'")
 
 
-def run(run_config: RunConfig):
+def run(run_config: RunConfig, outfile: str | Path):
     """Perform a single training run based on the given config"""
-    if run_config.algorithm in ["FedAvg", "FedProx"]:
+    alg = run_config.algorithm.lower()
+    if alg in ["fedavg", "fedprox"]:
         assert isinstance(run_config, FedProxConfig)
-        run_fedprox(run_config)
-    elif run_config.algorithm in ["IFCA", "FLSC"]:
+        run_fedprox(run_config, outfile)
+    elif alg in ["ifca", "flsc"]:
         assert isinstance(run_config, FlscConfig)
-        run_flsc(run_config)
-    elif run_config.algorithm == "Local":
-        run_local(run_config)
-    elif run_config.algorithm == "Global":
-        run_global(run_config)
+        run_flsc(run_config, outfile)
+    elif alg == "local":
+        run_local(run_config, outfile)
+    elif alg == "global":
+        run_global(run_config, outfile)
     else:
         raise Exception(f"Unknown algorithm")
 
 
-def run_fedprox(run_config: FedProxConfig):
+def run_fedprox(run_config: FedProxConfig, outfile: str | Path):
     """Run a single FedAvg or FedProx training run"""
     logger.debug(f"Running: {run_config}")
     pass
 
 
-def run_flsc(run_config: FlscConfig):
+def run_flsc(run_config: FlscConfig, outfile: str | Path):
     """Run a single IFCA or FLSC training run"""
     logger.debug(f"Running: {run_config}")
     pass
 
 
-def run_local(run_config: RunConfig):
+def run_local(run_config: RunConfig, outfile: str | Path):
     """Train a local model for each client"""
     logger.debug(f"Running: {run_config}")
     pass
 
 
-def run_global(run_config: RunConfig):
+def run_global(run_config: RunConfig, outfile: str | Path):
     """Train a global model for each dataset"""
     logger.debug(f"Running: {run_config}")
     pass
@@ -234,8 +237,17 @@ def main():
 
     logger.info(f"...generated {len(configs)} configs")
 
+    outdir = Path(OUTPUT_DIR)
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    sub_id = 0
     for config in configs:
-        logger.debug(config)
+        filename = f"{run_id}_{sub_id}"
+        with open(outdir / (filename + ".config.json"), "w") as config_file:
+            json.dump(config.__dict__, config_file)
+            config_file.write("\n")
+        run(config, outfile=outdir / filename)
+        sub_id += 1
 
 
 if __name__ == "__main__":
