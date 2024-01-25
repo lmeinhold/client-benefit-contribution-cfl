@@ -26,7 +26,6 @@ Options:
     --version                                   Show version
     -h --help                                   Show this screen
 """
-import jsonpickle
 import logging
 import os
 import sys
@@ -34,6 +33,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import jsonpickle
 import torch
 from docopt import docopt
 
@@ -248,10 +248,16 @@ def main():
     sub_id = 0
     for config in configs:
         filename = f"{run_id}_{sub_id}"
-        with open(outdir / (filename + ".config.json"), "w") as config_file:
-            config_file.write(jsonpickle.encode(config.__dict__, config_file))
-            config_file.write("\n")
-        run(config, outfile=outdir / filename)
+        conf_filename = outdir / (filename + ".config.json")
+
+        if not conf_filename.is_file():
+            run(config, outfile=outdir / filename)
+            with open(conf_filename, "w") as config_file:
+                config_file.write(jsonpickle.encode(config.__dict__, config_file))
+                config_file.write("\n")
+        else:
+            logger.info(f"Skipping {filename} because it already exists")
+
         sub_id += 1
 
 
