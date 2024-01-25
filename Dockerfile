@@ -1,10 +1,15 @@
 FROM python:3.11-bookworm
 
-ENV MCFL_EXPERIMENTS=all
-
 WORKDIR /usr/src/mcfl
 
-COPY . .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY experiments .
+COPY federated_learning .
+COPY __init__.py .
+COPY train.py .
+COPY models .
+COPY requirements* ./
+COPY scripts .
+COPY utils .
 
-CMD [ "python", "./scripts/run_experiments.py", "-e", "$MCFL_EXPERIMENTS" ]
+
+RUN pip install --no-cache-dir -r requirements.txt
