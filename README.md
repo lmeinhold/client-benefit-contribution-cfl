@@ -2,16 +2,49 @@
 
 # Client Benefit and Contribution in Clustered Federated Learning
 ## How to Run
+### Native
+Model training:
+```shell
+./train.py
+```
+
+View help:
+```shell
+./train.py --help
+```
+
 ### Docker
-```sh
-docker build -t mcfl:latest .
+Build container:
+```shell
+docker build -t cfl:latest .
+```
 
-# Run all experiments
-docker run -it --rm -v ./output:/usr/src/mcfl/output mcfl:latest
+Run everything:
+```shell
+docker run -it --rm -v ./output:/usr/src/cfl/output cfl:latest ./train.py
+```
 
-# Run specific experiments
-docker run -it --rm -v ./output:/usr/src/mcfl/output -e MCFL_EXPERIMENTS=fedavg_mnist,ifca_cifar10 mcfl:latest
+List algorithms and datasets:
+```shell
+docker run -it --rm mcfl:latest ./train.py --list-algorithms
+docker run -it --rm mcfl:latest ./train.py --list-datasets
+```
 
-# List available experiments
-docker run -it --rm mcfl:latest scripts/run_experiments.py --list
+View help:
+```shell
+docker run -it --rm cfl:latest ./train.py --help
+```
+
+### Docker with NVIDIA GPU
+Install and configure the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+Then run the docker commands with gpu enabled:
+
+Using the NVIDIA docker runtime:
+```shell
+docker run -it --rm --runtime=nvidia --gpus=all -v ./output:/usr/src/cfl/output cfl:latest ./train.py
+```
+
+Or using CDI:
+```shell
+podman run -it --rm --device nvidia.com/gpu=all --security-opt=label=disable -v ./output:/usr/src/cfl/output cfl:latest ./train.py
 ```

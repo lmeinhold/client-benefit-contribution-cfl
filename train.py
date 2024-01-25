@@ -28,11 +28,13 @@ Options:
 """
 import jsonpickle
 import logging
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import torch
 from docopt import docopt
 
 logging.basicConfig(level=logging.INFO)
@@ -186,7 +188,8 @@ def main():
     if verbose:
         logger.setLevel(logging.DEBUG)
 
-    logger.debug(f"Arguments: {arguments}")
+    # logger.debug(f"Arguments: {arguments}")
+    logger.debug(f"Running in dir: {os.getcwd()}")
 
     if arguments["--list-algorithms"]:
         print("\n".join(ALL_ALGORITHMS))
@@ -195,6 +198,8 @@ def main():
     if arguments["--list-datasets"]:
         print("\n".join(ALL_DATASETS))
         sys.exit(0)
+
+    logger.debug(f"GPU available: {torch.cuda.is_available()}")
 
     algorithms = parse_list_arg(arguments["--algorithms"])
     clusters = to_int_list(parse_list_arg(arguments["--clusters"]))
