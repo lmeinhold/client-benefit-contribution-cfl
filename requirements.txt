@@ -3,9 +3,8 @@ pandas
 scikit-learn
 torch
 torchvision
-plotly
-kaleido
+matplotlib
+seaborn
 tqdm
 docopt
-uuid
 jsonpickle

@@ -26,7 +26,7 @@ Options:
     --version                                   Show version
     -h --help                                   Show this screen
 """
-import json
+import jsonpickle
 import logging
 import sys
 from dataclasses import dataclass
@@ -244,7 +244,7 @@ def main():
     for config in configs:
         filename = f"{run_id}_{sub_id}"
         with open(outdir / (filename + ".config.json"), "w") as config_file:
-            json.dump(config.__dict__, config_file)
+            config_file.write(jsonpickle.encode(config.__dict__, config_file))
             config_file.write("\n")
         run(config, outfile=outdir / filename)
         sub_id += 1
