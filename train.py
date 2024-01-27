@@ -2,7 +2,7 @@
 """Model Training.
 
 Usage:
-    train.py [--datasets=<datasets> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --verbose]
+    train.py [--datasets=<datasets> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --dry-run --verbose]
     train.py (--list-algorithms | --list-datasets)
     train.py (-h | --help)
     train.py --version
@@ -18,6 +18,7 @@ Options:
     --clusters-per-client=<clusters-per-client> Maximum number of clusters that a client is assigned to. (IFCA/FLSC) [default: 2]
 
     --resume=<run_id>                           Resume training from a previous run. [default:]
+    --dry-run                                   Generate configs only, without training.
     --verbose                                   Print debug info
 
     --list-algorithms                           List all implemented algorithms.
@@ -36,6 +37,13 @@ from pathlib import Path
 import jsonpickle
 import torch
 from docopt import docopt
+from torch.nn import CrossEntropyLoss
+from torch.optim import SGD
+
+import models.mnist as mnist_models
+import models.cifar as cifar_models
+from federated_learning.fedprox import FedProx
+from utils.torchutils import get_device
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("train.py")
@@ -43,7 +51,19 @@ logger = logging.getLogger("train.py")
 ALL_ALGORITHMS = ["FedAvg", "FedProx", "IFCA", "FLSC", "Local", "Global"]
 ALL_DATASETS = ["mnist", "cifar10"]
 
+MODELS = {
+    "mnist": mnist_models.CNN,
+    "cifar10": cifar_models.CNN,
+}
+
+LOSS_FN = CrossEntropyLoss
+LR = 1e-2
+
 OUTPUT_DIR = "./output/"
+
+
+def create_optimizer(params):
+    return SGD(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:
@@ -141,27 +161,37 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, client
         raise Exception(f"Unknown algorithm '{algorithm}'")
 
 
-def run(run_config: RunConfig, outfile: str | Path):
+def run(run_config: RunConfig, train_data, test_data, outfile: str | Path):
     """Perform a single training run based on the given config"""
     alg = run_config.algorithm.lower()
     if alg in ["fedavg", "fedprox"]:
         assert isinstance(run_config, FedProxConfig)
-        run_fedprox(run_config, outfile)
+        return run_fedprox(run_config, train_data, test_data, outfile)
     elif alg in ["ifca", "flsc"]:
         assert isinstance(run_config, FlscConfig)
-        run_flsc(run_config, outfile)
+        return run_flsc(run_config, outfile)
     elif alg == "local":
-        run_local(run_config, outfile)
+        return run_local(run_config, outfile)
     elif alg == "global":
-        run_global(run_config, outfile)
+        return run_global(run_config, outfile)
     else:
         raise Exception(f"Unknown algorithm")
 
 
-def run_fedprox(run_config: FedProxConfig, outfile: str | Path):
+def run_fedprox(run_config: FedProxConfig, train_data, test_data, outfile: str | Path):
     """Run a single FedAvg or FedProx training run"""
     logger.debug(f"Running: {run_config}")
-    pass
+    fedprox = FedProx(
+        model_class=MODELS[run_config.dataset],
+        loss=LOSS_FN(),
+        optimizer=create_optimizer,
+        rounds=run_config.rounds,
+        epochs=run_config.epochs,
+        clients_per_round=run_config.clients_per_round,
+        mu=run_config.penalty,
+        device=get_device()
+    )
+    return fedprox.fit(train_data, test_data)
 
 
 def run_flsc(run_config: FlscConfig, outfile: str | Path):
@@ -251,9 +281,10 @@ def main():
         conf_filename = outdir / (filename + ".config.json")
 
         if not conf_filename.is_file():
-            run(config, outfile=outdir / filename)
+            if not arguments["--dry-run"]:
+                run(config, outfile=outdir / filename)
             with open(conf_filename, "w") as config_file:
-                config_file.write(jsonpickle.encode(config.__dict__, config_file))
+                config_file.write(jsonpickle.encode(config, config_file))
                 config_file.write("\n")
         else:
             logger.info(f"Skipping {filename} because it already exists")
