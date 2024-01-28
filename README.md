@@ -6,7 +6,7 @@
 Model training:
 ```shell
 ./train.py --datasets=MNIST\
-        --imbalance-types=label_distribution\
+      --imbalance-types=label_distribution\
       --imbalances=0.1,1,10\
       --algorithms=FedAvg,IFCA\
       --rounds=3\
