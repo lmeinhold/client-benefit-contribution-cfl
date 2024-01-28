@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 
@@ -19,3 +20,7 @@ class ResultsWriter:
     def save(self, path):
         df = self.as_dataframe()
         df.to_csv(path, index=False)
+
+
+def join_cluster_identites(identities: np.ndarray) -> str:
+    return "|".join(map(str, identities))

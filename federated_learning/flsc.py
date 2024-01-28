@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from tqdm.auto import tqdm
 
-from utils.results_writer import ResultsWriter
+from utils.results_writer import ResultsWriter, join_cluster_identites
 from utils.torchutils import average_state_dicts, StateDict
 
 
@@ -78,14 +78,14 @@ class FLSC:
                         client=str(k),
                         stage="train",
                         loss=train_loss.mean(),
-                        cluster_identities=cluster_identities[k],
+                        cluster_identities=join_cluster_identites(cluster_identities[k].tolist()),
                     ).write(
                         round=t,
                         client=str(k),
                         stage="test",
                         loss=test_loss,
                         accuracy=test_accuracy,
-                        cluster_identities=cluster_identities[k],
+                        cluster_identities=join_cluster_identites(cluster_identities[k]),
                     )
 
                     updated_weights.append(client_weights)

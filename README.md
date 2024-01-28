@@ -2,10 +2,20 @@
 
 # Client Benefit and Contribution in Clustered Federated Learning
 ## How to Run
-### Native
+### Local
 Model training:
 ```shell
-./train.py
+./train.py --datasets=MNIST\
+        --imbalance-types=label_distribution\
+      --imbalances=0.1,1,10\
+      --algorithms=FedAvg,IFCA\
+      --rounds=3\
+      --epochs=5\
+      --penalty=0\
+      --n-clients=80\
+      --clients-per-round=0.8\
+      --clusters=5\
+      --clusters-per-client=1
 ```
 
 View help:

@@ -2,26 +2,22 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, random_split, Subset
 
-SEED = 42
-
-
 def extract_raw_data(dataset: Dataset) -> tuple[np.ndarray, np.ndarray]:
     labels = np.array(dataset.targets)
     features = np.array(dataset.data)
     return features, labels
 
 
-def split_dataset_equally(dataset: Dataset, n: int, seed=SEED):
+def split_dataset_equally(dataset: Dataset, n: int, *args, **kwargs):
     """Split a dataset into n parts of equal length"""
-    np.random.seed(seed)
     return random_split(dataset=dataset, lengths=np.repeat(int(len(dataset) / n), n))
 
 
-def split_with_quantity_skew(dataset: Dataset, alpha: float, n_clients: int, seed=SEED) -> list[Dataset]:
+def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1,*args, **kwargs) -> list[
+    Dataset]:
     """Split a dataset into n datasets with varying size following a dirichlet distribution"""
     n = len(dataset)
 
-    np.random.seed(seed)
     indices = np.random.permutation(n)
 
     proportions = np.random.dirichlet(np.repeat(alpha, n_clients))
@@ -36,9 +32,7 @@ def split_with_quantity_skew(dataset: Dataset, alpha: float, n_clients: int, see
     return [Subset(dataset, batch_indices[i]) for i, idx in enumerate(batch_indices)]
 
 
-def split_with_label_distribution_skew(dataset: Dataset, alpha: float, n_clients: int, seed=SEED):
-    np.random.seed(seed)
-
+def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, *args, **kwargs):
     features, labels = extract_raw_data(dataset)
 
     n = len(dataset)
@@ -71,14 +65,13 @@ def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 7):
             batch_indices[largest_client_index] = batch_indices[largest_client_index][:-transfer]
 
 
-def train_test_split(datasets, p_test=0.2, seed=17):
+def train_test_split(datasets, p_test=0.2):
     """Split a list of datasets into a list of train datasets and a list of test datasets"""
-    generator = torch.Generator().manual_seed(seed)
 
     train_sets = []
     test_sets = []
     for ds in datasets:
-        train, test = random_split(ds, [(1 - p_test), p_test], generator=generator)
+        train, test = random_split(ds, [(1 - p_test), p_test])
         train_sets.append(train)
         test_sets.append(test)
     return train_sets, test_sets
