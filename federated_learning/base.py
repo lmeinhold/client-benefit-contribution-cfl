@@ -16,8 +16,4 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
 
 
 class FederatedLearningClient(metaclass=abc.ABCMeta):
-    # @abc.abstractmethod
-    # def train_round(self, shared_state: StateDict, epochs: int) -> StateDict:
-    #    """Run a single training round"""
-    #    pass
     pass
