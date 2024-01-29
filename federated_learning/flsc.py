@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
 from utils.results_writer import ResultsWriter, join_cluster_identites
@@ -71,7 +72,7 @@ class FLSC:
                     client_weights, train_loss = self._train_client_round(global_weights, model, cluster_identities[k],
                                                                           client_train_data)
 
-                    test_loss, test_accuracy = self._test_client_round(model, client_test_data)
+                    test_loss, f1 = self._test_client_round(model, client_test_data)
 
                     self.results.write(
                         round=t,
@@ -84,7 +85,7 @@ class FLSC:
                         client=str(k),
                         stage="test",
                         loss=test_loss,
-                        accuracy=test_accuracy,
+                        f1=f1,
                         cluster_identities=join_cluster_identites(cluster_identities[k]),
                     )
 
@@ -137,7 +138,7 @@ class FLSC:
         n_samples = len(client_test_data.dataset)
 
         round_loss = 0
-        round_correct = 0
+        round_y_pred, round_y_true = [], []
 
         model.eval()
 
@@ -150,13 +151,16 @@ class FLSC:
                 batch_loss = self.loss(pred, y)
                 round_loss += batch_loss.cpu().item()
 
-            batch_correct = (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().cpu().item()
-            round_correct += batch_correct
+            round_y_pred.append(pred.argmax(1).detach().cpu())
+            round_y_true.append(y.argmax(1).detach().cpu())
 
         round_loss /= len(client_test_data)
-        round_accuracy = round_correct / n_samples
+        round_y_pred = np.concatenate(round_y_pred)
+        round_y_true = np.concatenate(round_y_true)
+        assert len(round_y_pred) == len(round_y_true)
+        assert len(round_y_pred) == len(client_test_data.dataset)
 
-        return round_loss, round_accuracy
+        return round_loss, f1_score(round_y_true, round_y_pred, average='macro')
 
     def _train_epoch(self, model, optimizer, client_train_data):
         epoch_loss = 0
