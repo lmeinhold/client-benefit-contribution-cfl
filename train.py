@@ -73,6 +73,7 @@ DATASETS = {
 
 MODELS = {
     "mnist": mnist_models.CNN,
+    "emnist": mnist_models.CNN,
     "cifar10": cifar_models.CNN,
 }
 
