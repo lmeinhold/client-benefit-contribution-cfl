@@ -1,107 +1,99 @@
+import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from federated_learning.base import FederatedLearningAlgorithm, FederatedLearningClient
-from utils.metrics_logging import Logger
+from federated_learning.base import FederatedLearningAlgorithm
+from utils.results_writer import ResultsWriter
 
 
 class LocalModels(FederatedLearningAlgorithm):
-    """Train a local model on each client, without any federation. Used to evaluate client benefit.
-    Arguments:
-        client_data: List of client datasets as DataLoaders
-        model_fn: a function that instantiates a model
-        optimizer_fn: a function that instantiates an optimizer from model parameters
-        loss_fn: loss function to use for training
-        epochs: number of epochs to run on each client
-        logger: a data logger to log accuracy, loss, etc.
-        device: the device to train model on
-        test_data: test data as a data loader OR None if no test data should be evaluated"""
-
-    def __init__(self, client_data: list[DataLoader], model_fn, optimizer_fn, loss_fn, epochs: int,
-                 logger: Logger, device: str = "cpu", test_data: DataLoader = None):
-        self.logger = logger
-        self.device = device
-        self.test_data = test_data
-        self.model_fn = model_fn
-        self.loss_fn = loss_fn
-        self.optimizer_fn = optimizer_fn
+    def __init__(self, model_class, loss, optimizer, epochs: int, device="cpu"):
+        self.model_class = model_class
+        self.loss = loss
+        self.optimizer = optimizer
         self.epochs = epochs
-        self.client_data = client_data
-
-    def create_client(self, client_id, data_loader, model):
-        return LocalClient(client_id, data_loader, model, self.optimizer_fn, self.loss_fn, self.logger,
-                           self.device)
-
-    def fit(self):
-        model = self.model_fn().to(self.device)
-        model = torch.compile(model=model, mode="reduce-overhead")
-        init_state = model.state_dict()
-
-        for i in tqdm(range(len(self.client_data)), desc="Clients"):
-            client = self.create_client(i, self.client_data[i], model)
-            client.train(self.epochs)
-            if self.test_data is not None:
-                if isinstance(self.test_data, list):
-                    data = self.test_data[i]
-                else:
-                    data = self.test_data
-                client.test(data)
-
-            # reset model parameters for next iter
-            model.load_state_dict(init_state, strict=True)
-
-    def client_count(self):
-        return len(self.client_data)
-
-
-class LocalClient(FederatedLearningClient):
-    def __init__(self, client_id: int, data_loader, model, optimizer_fn, loss_fn, logger: Logger, device="cpu"):
-        self.client_id = client_id
-        self.data_loader = data_loader
-        self.model = model
-        self.optimizer = optimizer_fn(self.model.parameters())
-        self.loss_fn = loss_fn.to(device)
         self.device = device
-        self.logger = logger
+        self.results = ResultsWriter()
 
-    @torch.compile(mode="reduce-overhead")
-    def train(self, epochs: int):
-        for t in range(epochs):
-            size = len(self.data_loader)
+    def fit(self, train_data: list[DataLoader], test_data: list[DataLoader] = None) -> ResultsWriter:
+        n_clients = len(train_data)
 
-            self.model.train()
+        shared_model = self.model_class().to(self.device)
+        shared_model = torch.compile(model=shared_model, mode="reduce-overhead")
 
-            overall_loss = 0
-            correct = 0
+        init_state = shared_model.state_dict()
 
-            for batch, (X, y) in enumerate(self.data_loader):
-                X = X.to(self.device)
-                y = y.to(self.device)
+        for k in tqdm(range(n_clients), desc="Clients", position=1):
+            shared_model.load_state_dict(init_state, strict=False)  # reset state
 
-                pred = self.model(X)
-                loss = self.loss_fn(pred, y)
-                overall_loss += loss.item()
-                correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
+            optimizer = self.optimizer(shared_model.parameters())
 
-                loss.backward()
-                self.optimizer.step()
-                self.optimizer.zero_grad()
+            for e in range(self.epochs):
+                train_loss = self._train_client_epoch(shared_model, train_data[k], optimizer)
+                self.results.write(
+                    round=e,
+                    client=str(k),
+                    stage="train",
+                    loss=train_loss,
+                    n_samples=len(train_data[k].dataset)
+                )
 
-            overall_loss /= len(self.data_loader)
-            accuracy = correct / len(self.data_loader.dataset)
-            self.logger.log_client_metrics(client_id=str(self.client_id), epoch=t, round=None, stage="train",
-                                           loss=overall_loss, accuracy=accuracy)
+                if test_data is not None:
+                    test_loss, f1 = self._test_client_epoch(shared_model, test_data[k])
+                    self.results.write(
+                        round=e,
+                        client=str(k),
+                        stage="test",
+                        loss=test_loss,
+                        f1=f1,
+                        n_samples=len(test_data[k].dataset)
+                    )
 
-    def test(self, test_data: DataLoader):
-        test_loss, correct = 0, 0
-        with torch.no_grad():
-            for X, y in test_data:
-                X, y = X.to(self.device), y.to(self.device)
-                pred = self.model(X)
-                test_loss += self.loss_fn(pred, y).item()
-                correct += (pred.argmax(1) == y.argmax(1)).type(torch.float).sum().item()
-            test_loss /= len(test_data)
-            correct /= len(test_data.dataset)
-            self.logger.log_client_metrics(client_id=str(self.client_id), stage="test", accuracy=correct,
-                                           loss=test_loss)
+        return self.results
+
+    def _train_client_epoch(self, model, train_dataloader, optimizer) -> float:
+        model.train()
+
+        epoch_loss = 0
+
+        for X, y in train_dataloader:
+            X, y = X.to(self.device), y.to(self.device)
+
+            pred = model(X)
+
+            loss = self.loss(pred, y)
+            epoch_loss += loss.cpu().item()
+
+            loss.backward()
+            optimizer.step()
+            optimizer.zero_grad()
+
+        return epoch_loss / len(train_dataloader)
+
+    def _test_client_epoch(self, model, test_dataloader) -> tuple[float, float]:
+        epoch_loss = 0
+        epoch_y_true = []
+        epoch_y_pred = []
+
+        model.eval()
+
+        for X, y in test_dataloader:
+            X, y = X.to(self.device), y.to(self.device)
+
+            with torch.no_grad():
+                pred = model(X)
+                loss = self.loss(pred, y)
+                epoch_loss += loss.cpu().item()
+
+            epoch_y_pred.append(pred.argmax(1).detach().cpu())
+            epoch_y_true.append(y.argmax(1).detach().cpu())
+
+        epoch_loss /= len(test_dataloader.dataset)
+        epoch_y_pred = np.concatenate(epoch_y_pred)
+        epoch_y_true = np.concatenate(epoch_y_true)
+        assert len(epoch_y_pred) == len(epoch_y_true)
+        assert len(epoch_y_pred) == len(test_dataloader.dataset)
+
+        return epoch_loss, f1_score(epoch_y_true, epoch_y_pred, average="macro")
