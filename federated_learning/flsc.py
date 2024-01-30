@@ -80,6 +80,7 @@ class FLSC:
                         stage="train",
                         loss=train_loss.mean(),
                         cluster_identities=join_cluster_identites(cluster_identities[k].tolist()),
+                        n_samples=len(client_train_data.dataset)
                     ).write(
                         round=t,
                         client=str(k),
@@ -87,6 +88,7 @@ class FLSC:
                         loss=test_loss,
                         f1=f1,
                         cluster_identities=join_cluster_identites(cluster_identities[k]),
+                        n_samples=len(client_test_data.dataset)
                     )
 
                     updated_weights.append(client_weights)
@@ -135,8 +137,6 @@ class FLSC:
         return new_identities
 
     def _test_client_round(self, model, client_test_data):
-        n_samples = len(client_test_data.dataset)
-
         round_loss = 0
         round_y_pred, round_y_true = [], []
 

@@ -71,7 +71,7 @@ def train_test_split(datasets, p_test=0.2):
     train_sets = []
     test_sets = []
     for ds in datasets:
-        train, test = random_split(ds, [(1 - p_test), p_test])
-        train_sets.append(train)
-        test_sets.append(test)
+        split = random_split(ds, [(1 - p_test), p_test])
+        train_sets.append(split[0])
+        test_sets.append(split[1])
     return train_sets, test_sets

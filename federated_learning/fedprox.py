@@ -58,13 +58,15 @@ class FedProx:
                         round=t,
                         client=str(k),
                         stage="train",
-                        loss=train_loss.mean()
+                        loss=train_loss.mean(),
+                        n_samples=len(client_train_data.dataset),
                     ).write(
                         round=t,
                         client=str(k),
                         stage="test",
                         loss=test_loss,
                         f1=f1,
+                        n_samples=len(client_test_data.dataset),
                     )
 
                     updated_weights.append(client_weights)

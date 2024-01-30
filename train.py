@@ -2,7 +2,7 @@
 """Model Training.
 
 Usage:
-    train.py [--datasets=<datasets> --imbalance-types=<imbalance-types> --imbalances=<imbalances> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --n-clients=<n-clients> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --dry-run --verbose]
+    train.py [--datasets=<datasets> --imbalance-types=<imbalance-types> --imbalances=<imbalances> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --n-clients=<n-clients> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --cpu --dry-run --verbose]
     train.py (--list-algorithms | --list-datasets)
     train.py (-h | --help)
     train.py --version
@@ -21,6 +21,7 @@ Options:
     --clusters-per-client=<clusters-per-client> Maximum number of clusters that a client is assigned to. (IFCA/FLSC) [default: 2]
 
     --resume=<run_id>                           Resume training from a previous run. [default:]
+    --cpu                                       Use CPU only. [default: False]
     --dry-run                                   Generate configs only, without training.
     --verbose                                   Print debug info
 
@@ -32,7 +33,6 @@ Options:
 """
 import functools
 import logging
-import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime
@@ -50,10 +50,11 @@ from experiments.datasets.base import create_dataloader
 from experiments.datasets.cifar import CIFAR10
 from experiments.datasets.emnist import EMNIST
 from experiments.datasets.imbalancing import split_dataset_equally, split_with_quantity_skew, \
-    split_with_label_distribution_skew
+    split_with_label_distribution_skew, train_test_split
 from experiments.datasets.mnist import MNIST
 from federated_learning.fedprox import FedProx
 from federated_learning.flsc import FLSC
+from utils.results_writer import ResultsWriter
 from utils.torchutils import get_device
 
 logging.basicConfig(level=logging.INFO)
@@ -207,24 +208,24 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
         raise Exception(f"Unknown algorithm '{algorithm}'")
 
 
-def run(run_config: RunConfig, train_data, test_data):
+def run(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Perform a single training run based on the given config"""
     alg = run_config.algorithm.lower()
     if alg in ["fedavg", "fedprox"]:
         assert isinstance(run_config, FedProxConfig)
-        return run_fedprox(run_config, train_data, test_data)
+        return run_fedprox(run_config, train_data, test_data, device=device)
     elif alg in ["ifca", "flsc"]:
-        assert isinstance(run_config, FlscConfig)
+        assert isinstance(run_config, FlscConfig, device=device)
         return run_flsc(run_config, train_data, test_data)
     elif alg == "local":
-        return run_local(run_config)
+        return run_local(run_config, device=device)
     elif alg == "global":
-        return run_global(run_config)
+        return run_global(run_config, device=device)
     else:
         raise Exception(f"Unknown algorithm")
 
 
-def run_fedprox(run_config: FedProxConfig, train_data, test_data):
+def run_fedprox(run_config: FedProxConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Run a single FedAvg or FedProx training run"""
     fedprox = FedProx(
         model_class=MODELS[run_config.dataset],
@@ -234,12 +235,12 @@ def run_fedprox(run_config: FedProxConfig, train_data, test_data):
         epochs=run_config.epochs,
         clients_per_round=run_config.clients_per_round,
         mu=run_config.penalty,
-        device=get_device()
+        device=device
     )
     return fedprox.fit(train_data, test_data)
 
 
-def run_flsc(run_config: FlscConfig, train_data, test_data):
+def run_flsc(run_config: FlscConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Run a single IFCA or FLSC training run"""
     flsc = FLSC(
         model_class=MODELS[run_config.dataset],
@@ -250,17 +251,17 @@ def run_flsc(run_config: FlscConfig, train_data, test_data):
         n_clusters=run_config.clusters,
         clusters_per_client=run_config.clusters_per_client,
         clients_per_round=run_config.clients_per_round,
-        device=get_device()
+        device=device
     )
     return flsc.fit(train_data, test_data)
 
 
-def run_local(run_config: RunConfig):
+def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Train a local model for each client"""
     pass  # TODO
 
 
-def run_global(run_config: RunConfig):
+def run_global(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Train a global model for each dataset"""
     pass  # TODO
 
@@ -284,7 +285,9 @@ def main():
         print("\n".join(ALL_DATASETS))
         sys.exit(0)
 
-    logger.info(f"GPU available: {torch.cuda.is_available()}")
+    logger.debug(f"GPU available: {torch.cuda.is_available()}")
+    device = "cpu" if arguments["--cpu"] else get_device()
+    logger.info(f"Using device: '{device}'")
 
     algorithms = parse_list_arg(arguments["--algorithms"])
     clusters = to_int_list(parse_list_arg(arguments["--clusters"]))
@@ -334,7 +337,7 @@ def main():
             if not arguments["--dry-run"]:
                 train_data, test_data = get_data_for_config(config.dataset, config.n_clients, config.imbalance_type,
                                                             config.imbalance_value)
-                results = run(config, train_data, test_data)
+                results = run(config, train_data, test_data, device=device)
                 results_df = results.as_dataframe()
                 results_df.to_csv(outdir / (filename + ".csv"), index=False)
                 logger.debug(results_df.head())
@@ -355,7 +358,7 @@ def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1):
     train_datasets = imbalance_fn(train, n, alpha)
     dataloaders = [create_dataloader(ds, BATCH_SIZE) for ds in train_datasets]
 
-    # train_loaders, test_loaders = train_test_split(dataloaders, TEST_SIZE) # TODO
+    train_loaders, test_loaders = train_test_split(dataloaders, TEST_SIZE)  # TODO
     train_loaders = dataloaders
 
     return train_loaders, train_loaders
