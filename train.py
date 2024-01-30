@@ -54,6 +54,7 @@ from experiments.datasets.imbalancing import split_dataset_equally, split_with_q
 from experiments.datasets.mnist import MNIST
 from federated_learning.fedprox import FedProx
 from federated_learning.flsc import FLSC
+from federated_learning.local import LocalModels
 from utils.results_writer import ResultsWriter
 from utils.torchutils import get_device
 
@@ -143,6 +144,8 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
                   penalty: float, clusters: int, clusters_per_client: int, imbalance_type,
                   imbalance_value: float) -> RunConfig:
     """Create a run config. Checks parameters for correct algorithm name"""
+    actual_imbalance_value = imbalance_value if imbalance_type != "iid" else 1
+
     if algorithm == "fedavg" or algorithm == "fedprox" and penalty == 0:
         return FedProxConfig(
             algorithm="FedAvg",
@@ -153,7 +156,7 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
             clients_per_round=clients_per_round,
             penalty=0,
             imbalance_type=imbalance_type,
-            imbalance_value=imbalance_value,
+            imbalance_value=actual_imbalance_value,
         )
     elif algorithm == "fedprox":
         return FedProxConfig(
@@ -165,7 +168,7 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
             clients_per_round=clients_per_round,
             penalty=penalty,
             imbalance_type=imbalance_type,
-            imbalance_value=imbalance_value,
+            imbalance_value=actual_imbalance_value,
         )
     elif algorithm == "ifca" or algorithm == "flsc" and clusters_per_client == 1:
         return FlscConfig(
@@ -178,7 +181,7 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
             clusters=clusters,
             clusters_per_client=1,
             imbalance_type=imbalance_type,
-            imbalance_value=imbalance_value,
+            imbalance_value=actual_imbalance_value,
         )
     elif algorithm == "flsc":
         return FlscConfig(
@@ -191,7 +194,7 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
             clusters=clusters,
             clusters_per_client=clusters_per_client,
             imbalance_type=imbalance_type,
-            imbalance_value=imbalance_value,
+            imbalance_value=actual_imbalance_value,
         )
     elif algorithm == "local" or algorithm == "global":
         return RunConfig(
@@ -202,7 +205,7 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
             n_clients=n_clients if algorithm == "local" else 1,
             clients_per_round=1,
             imbalance_type=imbalance_type,
-            imbalance_value=imbalance_value,
+            imbalance_value=actual_imbalance_value,
         )
     else:
         raise Exception(f"Unknown algorithm '{algorithm}'")
@@ -215,12 +218,12 @@ def run(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> Re
         assert isinstance(run_config, FedProxConfig)
         return run_fedprox(run_config, train_data, test_data, device=device)
     elif alg in ["ifca", "flsc"]:
-        assert isinstance(run_config, FlscConfig, device=device)
-        return run_flsc(run_config, train_data, test_data)
+        assert isinstance(run_config, FlscConfig)
+        return run_flsc(run_config, train_data, test_data, device=device)
     elif alg == "local":
-        return run_local(run_config, device=device)
+        return run_local(run_config, train_data, test_data, device=device)
     elif alg == "global":
-        return run_global(run_config, device=device)
+        return run_global(run_config, train_data, test_data, device=device)
     else:
         raise Exception(f"Unknown algorithm")
 
@@ -258,12 +261,19 @@ def run_flsc(run_config: FlscConfig, train_data, test_data, device: str = "cpu")
 
 def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Train a local model for each client"""
-    pass  # TODO
+    local = LocalModels(
+        model_class=MODELS[run_config.dataset],
+        loss=LOSS_FN(),
+        optimizer=create_optimizer,
+        epochs=run_config.epochs,
+        device=device
+    )
+    return local.fit(train_data, test_data)
 
 
 def run_global(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Train a global model for each dataset"""
-    pass  # TODO
+    raise NotImplementedError()
 
 
 @functools.cache

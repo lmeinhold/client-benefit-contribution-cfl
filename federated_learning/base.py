@@ -1,19 +1,11 @@
 import abc
 
+from utils.results_writer import ResultsWriter
 from utils.torchutils import StateDict
 
 
 class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def fit(self):
+    def fit(self, train_data, test_data) -> ResultsWriter:
         """Fit a federated model"""
         pass
-
-    @abc.abstractmethod
-    def client_count(self):
-        """Number of clients in the federated model"""
-        pass
-
-
-class FederatedLearningClient(metaclass=abc.ABCMeta):
-    pass
