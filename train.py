@@ -201,8 +201,8 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
         return RunConfig(
             algorithm=algorithm,
             dataset=dataset,
-            rounds=1,
-            epochs=rounds,
+            rounds=rounds,
+            epochs=epochs,
             n_clients=n_clients if algorithm == "local" else 1,
             clients_per_round=1,
             imbalance_type=imbalance_type,
@@ -266,6 +266,7 @@ def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu")
         model_class=MODELS[run_config.dataset],
         loss=LOSS_FN(),
         optimizer=create_optimizer,
+        rounds=run_config.rounds,
         epochs=run_config.epochs,
         device=device
     )

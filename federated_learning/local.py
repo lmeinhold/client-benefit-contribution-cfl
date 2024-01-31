@@ -9,10 +9,11 @@ from utils.results_writer import ResultsWriter
 
 
 class LocalModels(FederatedLearningAlgorithm):
-    def __init__(self, model_class, loss, optimizer, epochs: int, device="cpu"):
+    def __init__(self, model_class, loss, optimizer, rounds: int, epochs: int, device="cpu"):
         self.model_class = model_class
         self.loss = loss
         self.optimizer = optimizer
+        self.rounds = rounds
         self.epochs = epochs
         self.device = device
         self.results = ResultsWriter()
@@ -30,20 +31,23 @@ class LocalModels(FederatedLearningAlgorithm):
 
             optimizer = self.optimizer(shared_model.parameters())
 
-            for e in range(self.epochs):
-                train_loss = self._train_client_epoch(shared_model, train_data[k], optimizer)
+            for r in range(self.rounds):
+                train_loss = 0
+                for e in range(self.epochs):
+                    train_loss += self._train_client_epoch(shared_model, train_data[k], optimizer)
+
                 self.results.write(
-                    round=e,
+                    round=r,
                     client=str(k),
                     stage="train",
-                    loss=train_loss,
+                    loss=train_loss / self.epochs,
                     n_samples=len(train_data[k].dataset)
                 )
 
                 if test_data is not None:
                     test_loss, f1 = self._test_client_epoch(shared_model, test_data[k])
                     self.results.write(
-                        round=e,
+                        round=r,
                         client=str(k),
                         stage="test",
                         loss=test_loss,
@@ -96,4 +100,4 @@ class LocalModels(FederatedLearningAlgorithm):
         assert len(epoch_y_pred) == len(epoch_y_true)
         assert len(epoch_y_pred) == len(test_dataloader.dataset)
 
-        return epoch_loss, f1_score(epoch_y_true, epoch_y_pred, average="macro")
+        return epoch_loss, f1_score(epoch_y_true, epoch_y_pred, average="weighted")

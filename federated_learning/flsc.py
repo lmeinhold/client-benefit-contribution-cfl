@@ -160,7 +160,7 @@ class FLSC:
         assert len(round_y_pred) == len(round_y_true)
         assert len(round_y_pred) == len(client_test_data.dataset)
 
-        return round_loss, f1_score(round_y_true, round_y_pred, average='macro')
+        return round_loss, f1_score(round_y_true, round_y_pred, average='weighted')
 
     def _train_epoch(self, model, optimizer, client_train_data):
         epoch_loss = 0
