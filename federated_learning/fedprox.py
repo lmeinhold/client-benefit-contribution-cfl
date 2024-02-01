@@ -129,8 +129,8 @@ class FedProx:
                                        model.named_parameters()) if self.mu != 0 else self.loss(pred, y)
             epoch_loss += loss.cpu().item()
 
-            # loss.backward(retain_graph=True)
-            loss.backward()
+            loss.backward(retain_graph=True)
+            # loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
