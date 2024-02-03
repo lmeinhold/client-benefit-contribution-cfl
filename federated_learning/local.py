@@ -22,9 +22,9 @@ class LocalModels(FederatedLearningAlgorithm):
         n_clients = len(train_data)
 
         shared_model = self.model_class().to(self.device)
-        shared_model = torch.compile(model=shared_model, mode="reduce-overhead")
+        # shared_model = torch.compile(model=shared_model, mode="reduce-overhead")
 
-        init_state = shared_model.state_dict()
+        init_state = dict(shared_model.named_parameters())
 
         for k in tqdm(range(n_clients), desc="Clients", position=1):
             shared_model.load_state_dict(init_state, strict=False)  # reset state
@@ -100,4 +100,4 @@ class LocalModels(FederatedLearningAlgorithm):
         assert len(epoch_y_pred) == len(epoch_y_true)
         assert len(epoch_y_pred) == len(test_dataloader.dataset)
 
-        return epoch_loss, f1_score(epoch_y_true, epoch_y_pred, average="weighted")
+        return epoch_loss, f1_score(epoch_y_true, epoch_y_pred, average="macro")

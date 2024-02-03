@@ -4,11 +4,11 @@ from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
 from utils.results_writer import ResultsWriter, join_cluster_identites
-from utils.torchutils import average_state_dicts, StateDict
+from utils.torchutils import average_parameters, StateDict
 
 
 def _fuse_model_weights(global_weights: list[StateDict], cluster_identities):
-    return average_state_dicts([global_weights[c] for c in cluster_identities])
+    return average_parameters([global_weights[c] for c in cluster_identities])
 
 
 class FLSC:
@@ -47,7 +47,7 @@ class FLSC:
             if isinstance(self.clients_per_round, float) else self.clients_per_round
 
         # initial model weights
-        global_weights = [self.model_class().state_dict() for _ in
+        global_weights = [self.model_class().named_parameters() for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
         model = self.model_class().to(self.device)
         # model = torch.compile(model=model, mode="reduce-overhead")
@@ -115,7 +115,7 @@ class FLSC:
             round_train_loss = self._train_epoch(model, optimizer, client_train_data)
             round_train_losses.append(round_train_loss)
 
-        return model.state_dict(), np.array(round_train_losses)
+        return model.named_parameters(), np.array(round_train_losses)
 
     def _update_cluster_identity_estimates(self, global_weights, model, client_train_data) -> np.ndarray:
         cluster_losses = []
@@ -160,7 +160,7 @@ class FLSC:
         assert len(round_y_pred) == len(round_y_true)
         assert len(round_y_pred) == len(client_test_data.dataset)
 
-        return round_loss, f1_score(round_y_true, round_y_pred, average='weighted')
+        return round_loss, f1_score(round_y_true, round_y_pred, average='macro')
 
     def _train_epoch(self, model, optimizer, client_train_data):
         epoch_loss = 0
@@ -190,14 +190,6 @@ class FLSC:
                                     c in cluster_identities[k, :]]
                 dataset_weights = dataset_sizes[relevant_clients]
 
-                updated_cluster_weights.append(average_state_dicts(relevant_weights, weights=dataset_weights))
+                updated_cluster_weights.append(average_parameters(relevant_weights, weights=dataset_weights))
 
         return updated_cluster_weights
-
-
-def weight_norms(weights1, weights2):
-    sum = 0
-    for k in weights1.keys():
-        if k.endswith(".weight"):
-            sum += torch.norm(weights1[k].to("cpu") - weights2[k].to("cpu"))
-    return sum

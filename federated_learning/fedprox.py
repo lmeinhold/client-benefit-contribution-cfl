@@ -4,7 +4,7 @@ from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
 from utils.results_writer import ResultsWriter
-from utils.torchutils import average_state_dicts, StateDict
+from utils.torchutils import average_parameters, StateDict
 
 
 class FedProx:
@@ -37,7 +37,7 @@ class FedProx:
                                                                                                 float) else self.clients_per_round
 
         model = self.model_class().to(self.device)
-        model = torch.compile(model=model, mode="reduce-overhead")
+        # model = torch.compile(model=model, mode="reduce-overhead")
         global_weights = model.named_parameters()
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
@@ -71,12 +71,13 @@ class FedProx:
 
                     updated_weights.append(client_weights)
 
-            global_weights = average_state_dicts(updated_weights)
+            global_weights = average_parameters(updated_weights)
 
         return self.results
 
     def _train_client_round(self, global_weights, model, client_train_data) -> tuple[StateDict, np.ndarray]:
         model.load_state_dict(dict(global_weights), strict=False)
+        global_params = model.parameters()
         optimizer = self.optimizer(model.parameters())
 
         model.train()
@@ -84,7 +85,7 @@ class FedProx:
         round_train_losses = []
 
         for e in range(self.epochs):
-            round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_weights)
+            round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_params)
             round_train_losses.append(round_train_loss)
 
         return model.named_parameters(), np.array(round_train_losses)
@@ -115,42 +116,31 @@ class FedProx:
         assert len(round_y_pred) == len(round_y_true)
         assert len(round_y_pred) == len(client_test_data.dataset)
 
-        return round_loss, f1_score(round_y_true, round_y_pred, average='weighted')
+        return round_loss, f1_score(round_y_true, round_y_pred, average='macro')
 
-    def _train_epoch(self, model, optimizer, client_train_data, global_weights):
+    def _train_epoch(self, model, optimizer, client_train_data, global_parameters):
         epoch_loss = 0
+
+        proximal_loss_term = 0 if self.mu == 0 else self._proximal_term(global_parameters, model.parameters())
 
         for X, y in client_train_data:
             X, y = X.to(self.device), y.to(self.device)
 
             pred = model(X)
             # calculate proximal term only if mu != 0 to speed up FedAvg
-            loss = self._proximal_loss(pred, y, global_weights,
-                                       model.named_parameters()) if self.mu != 0 else self.loss(pred, y)
+            loss = self.loss(pred, y) + proximal_loss_term
             epoch_loss += loss.cpu().item()
 
             loss.backward(retain_graph=True)
-            # loss.backward()
             optimizer.step()
             optimizer.zero_grad()
 
         return epoch_loss / len(client_train_data)
 
-    def _proximal_loss(self, pred, y, old_state, new_state):
-        """Compute the loss including the FedProx proximal term"""
-
-        old_state = dict(old_state)
-        new_state = dict(new_state)
-
-        return self.loss(pred, y) + self._proximal_term(old_state, new_state)
-
-    @torch.compile(mode="reduce-overhead")
+    # @torch.compile(mode="reduce-overhead")
     def _proximal_term(self, old_state, new_state):
-        proximal_term = 0
-        for k in old_state.keys():
-            proximal_term += (new_state[k] - old_state[k]).norm(2)
+        proximal_loss = 0
+        for w, w_t in zip(old_state, new_state):
+            proximal_loss += (w - w_t).norm(2)
 
-        proximal_term = (self.mu / 2.0) * proximal_term
-        # self.results.write(proximal_term=proximal_term)
-
-        return proximal_term
+        return (self.mu / 2.0) * proximal_loss
