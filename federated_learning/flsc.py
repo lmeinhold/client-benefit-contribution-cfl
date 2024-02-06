@@ -3,7 +3,7 @@ import torch
 from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
-from utils.results_writer import ResultsWriter, join_cluster_identites
+from utils.results_writer import ResultsWriter, join_cluster_identities
 from utils.torchutils import average_parameters, StateDict
 
 
@@ -79,7 +79,7 @@ class FLSC:
                         client=str(k),
                         stage="train",
                         loss=train_loss.mean(),
-                        cluster_identities=join_cluster_identites(cluster_identities[k].tolist()),
+                        cluster_identities=join_cluster_identities(cluster_identities[k].tolist()),
                         n_samples=len(client_train_data.dataset)
                     ).write(
                         round=t,
@@ -87,7 +87,7 @@ class FLSC:
                         stage="test",
                         loss=test_loss,
                         f1=f1,
-                        cluster_identities=join_cluster_identites(cluster_identities[k]),
+                        cluster_identities=join_cluster_identities(cluster_identities[k].tolist()),
                         n_samples=len(client_test_data.dataset)
                     )
 
@@ -133,8 +133,12 @@ class FLSC:
 
             cluster_losses.append(loss / len(client_train_data))
 
-        new_identities = np.argsort(cluster_losses)[:self.clusters_per_client]
+        new_identities = self.get_new_cluster_identities_from_losses(cluster_losses, self.clusters_per_client)
         return new_identities
+
+    @staticmethod
+    def get_new_cluster_identities_from_losses(cluster_losses: np.ndarray|list[float], n: int) -> np.ndarray:
+        return np.argsort(cluster_losses)[:n]
 
     def _test_client_round(self, model, client_test_data):
         round_loss = 0

@@ -43,6 +43,7 @@ import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
+from tqdm.auto import tqdm
 
 import models.cifar as cifar_models
 import models.mnist as mnist_models
@@ -89,7 +90,7 @@ BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
 OUTPUT_DIR = "./output/"
-DATA_DIR = "/tmp"
+DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
@@ -303,7 +304,7 @@ def main():
 
     algorithms = parse_list_arg(arguments["--algorithms"])
     clusters = to_int_list(parse_list_arg(arguments["--clusters"]))
-    clusters_per_client = to_int_list(parse_list_arg(arguments["--clusters"]))
+    clusters_per_client = to_int_list(parse_list_arg(arguments["--clusters-per-client"]))
     datasets = parse_list_arg(arguments["--datasets"])
     penalty = to_float_list(parse_list_arg(arguments["--penalty"]))
 
@@ -340,7 +341,7 @@ def main():
     outdir.mkdir(parents=True, exist_ok=True)
 
     sub_id = 0
-    for config in configs:
+    for config in tqdm(configs, "Run"):
         logger.debug(f"Running {config}")
         filename = f"{run_id}_{sub_id}"
         conf_filename = outdir / (filename + ".config.json")
@@ -364,7 +365,7 @@ def main():
 
 
 def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1):
-    """Genereate a set of train and test datasets from a given dataset, using the specified imbalance"""
+    """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
     train = dataset(DATA_DIR).train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
     train_datasets = imbalance_fn(train, n, alpha)

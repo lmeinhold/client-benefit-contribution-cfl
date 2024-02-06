@@ -22,5 +22,5 @@ class ResultsWriter:
         df.to_csv(path, index=False)
 
 
-def join_cluster_identites(identities: np.ndarray) -> str:
+def join_cluster_identities(identities: np.ndarray) -> str:
     return "|".join(map(str, identities))
