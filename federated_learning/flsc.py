@@ -49,7 +49,7 @@ class FLSC:
             if isinstance(self.clients_per_round, float) else self.clients_per_round
 
         # initial model weights
-        global_weights = [self.model_class().named_parameters() for _ in
+        global_weights = [dict(self.model_class().named_parameters()) for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
         model = self.model_class().to(self.device)
         # model = torch.compile(model=model, mode="reduce-overhead")
@@ -117,7 +117,7 @@ class FLSC:
             round_train_loss = self._train_epoch(model, optimizer, client_train_data)
             round_train_losses.append(round_train_loss)
 
-        return model.named_parameters(), np.array(round_train_losses)
+        return dict(model.named_parameters()), np.array(round_train_losses)
 
     def _update_cluster_identity_estimates(self, global_weights, model, client_train_data) -> np.ndarray:
         cluster_losses = []

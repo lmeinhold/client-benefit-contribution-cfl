@@ -38,7 +38,7 @@ class FedProx:
 
         model = self.model_class().to(self.device)
         # model = torch.compile(model=model, mode="reduce-overhead")
-        global_weights = model.named_parameters()
+        global_weights = dict(model.named_parameters())
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
             updated_weights = []
@@ -88,7 +88,7 @@ class FedProx:
             round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_params)
             round_train_losses.append(round_train_loss)
 
-        return model.named_parameters(), np.array(round_train_losses)
+        return dict(model.named_parameters()), np.array(round_train_losses)
 
     def _test_client_round(self, model, client_test_data):
         n_samples = len(client_test_data.dataset)
