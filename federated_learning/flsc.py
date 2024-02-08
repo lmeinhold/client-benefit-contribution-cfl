@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import torch
 from sklearn.metrics import f1_score
@@ -188,6 +190,8 @@ class FLSC:
         for c in range(self.n_clusters):
             relevant_clients = [k for k in chosen_client_identities if c in cluster_identities[k, :]]
             if len(relevant_clients) == 0:
+                # keep old weights if no clients were trained for c in this round
+                warnings.warn(f"No clients for cluster {c}")
                 updated_cluster_weights.append(old_weights[c])
             else:
                 relevant_weights = [updated_weights[i] for i, k in enumerate(chosen_client_identities) if

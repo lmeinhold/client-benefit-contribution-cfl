@@ -43,6 +43,7 @@ import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
 from torch.optim import SGD
+from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import models.cifar as cifar_models
@@ -364,17 +365,19 @@ def main():
         sub_id += 1
 
 
+def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]:
+    return [create_dataloader(d, batch_size) for d in datasets]
+
+
 def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1):
     """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
     train = dataset(DATA_DIR).train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
     train_datasets = imbalance_fn(train, n, alpha)
-    dataloaders = [create_dataloader(ds, BATCH_SIZE) for ds in train_datasets]
 
-    train_loaders, test_loaders = train_test_split(dataloaders, TEST_SIZE)  # TODO
-    train_loaders = dataloaders
+    train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE)
 
-    return train_loaders, train_loaders
+    return datasets_to_dataloaders(train_datasets), datasets_to_dataloaders(test_datasets)
 
 
 def generate_configs(algorithms, n_clients, clients_per_round, clusters, clusters_per_client, datasets, epochs, penalty,

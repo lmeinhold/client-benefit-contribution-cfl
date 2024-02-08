@@ -11,20 +11,30 @@ def get_device() -> str:
 StateDict = dict[str, torch.Tensor]
 
 
-def average_parameters(state_dicts: list[StateDict], include_biases=True, weights=None):
+def average_parameters(state_dicts: list[StateDict], weights=None):
     """Average model parameters.
     If `weights` is provided, perform a weighted average"""
     weights = np.ones_like(state_dicts) if weights is None else weights
-    updated_dict = {}
+    aggregated_state_dicts = collect_state_dicts(state_dicts)
+    return dict([(key, tensor_weighted_mean(tensors, weights)) for key, tensors in aggregated_state_dicts.items()])
+
+
+def tensor_weighted_mean(tensors, weights):
+    """Calculate the weighted mean of a list of tensors"""
+    assert len(tensors) == len(weights), \
+        f"Length of state_dicts ({len(tensors)}) does not match length of weights ({len(weights)})"
+    return torch.stack([tensors[i] * weights[i] for i in range(len(tensors))]).sum(dim=0) / weights.sum()
+
+
+def collect_state_dicts(state_dicts: list[StateDict]) -> dict[str, list[torch.Tensor]]:
+    """Turn a list of state dicts into a dict of lists of weights"""
+    aggregated_state_dict = {}
     for state_gen in state_dicts:
-        state_dict = state_gen if isinstance(state_gen, dict) else dict(state_gen)
+        state_dict = state_gen if isinstance(state_gen, dict) else dict(
+            state_gen)  # ensure state_dict is actually a dict
         for k in state_dict.keys():
-            if k in updated_dict:
-                updated_dict[k].append(state_dict[k])
+            if k in aggregated_state_dict:
+                aggregated_state_dict[k].append(state_dict[k])
             else:
-                updated_dict[k] = [state_dict[k]]
-    for k, v in updated_dict.items():
-        #assert len(v) == len(
-        #    weights), f"Length of state_dicts ({len(v)}) does not match length of weights ({len(weights)}) for key {k}, {v}"
-        updated_dict[k] = torch.stack([v[i] * weights[i] for i in range(len(v))]).sum(dim=0) / weights.sum()
-    return updated_dict
+                aggregated_state_dict[k] = [state_dict[k]]
+    return aggregated_state_dict
