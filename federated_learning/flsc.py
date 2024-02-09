@@ -52,7 +52,7 @@ class FLSC:
         global_weights = [dict(self.model_class().named_parameters()) for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
         model = self.model_class().to(self.device)
-        # model = torch.compile(model=model, mode="reduce-overhead")
+        # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
 
         # inital cluster identities
         cluster_identities = np.random.choice(np.arange(self.n_clusters), size=[n_clients, self.clusters_per_client])

@@ -2,43 +2,46 @@
 """Model Training.
 
 Usage:
-    train.py [--datasets=<datasets> --imbalance-types=<imbalance-types> --imbalances=<imbalances> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --n-clients=<n-clients> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --cpu --dry-run --verbose]
+    train.py [--datasets=<datasets> --imbalance-types=<imbalance-types> --imbalances=<imbalances> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --n-clients=<n-clients> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --seed=<seed> --cpu --dry-run --verbose]
     train.py (--list-algorithms | --list-datasets)
     train.py (-h | --help)
     train.py --version
 
 Options:
-    --datasets=<datasets>                       List of datasets to train on. [default: all]
-    --imbalance-types=<imbalance-types>         List of data imbalances to apply to each dataset. [default: all]
-    --imbalances=<imbalances>                   List of severities of data imbalance to use per imbalance type. [default: 0.1,1,5,10]
-    --algorithms=<algorithms>                   List of algorithms to run. [default: all]
-    --rounds=<rounds>                           Number of federated learning rounds. [default: 100]
-    --epochs=<epochs>                           Number of epochs per round. [default: 5]
-    --penalty=<penalty>                         Factor µ for the proximal term. (FedProx) [default: 0.1]
-    --clusters=<clusters>                       Number of clusters. [default: 3]
-    --n-clients=<n-clients>                     Number of clients. [default: 100]
-    --clients-per-round=<clients-per-round>     Fraction of clients selected for training per round. [default: 0.8]
-    --clusters-per-client=<clusters-per-client> Maximum number of clusters that a client is assigned to. (IFCA/FLSC) [default: 2]
+    --datasets=<datasets>                           List of datasets to train on. [default: all]
+    --imbalance-types=<imbalance-types>             List of data imbalances to apply to each dataset. [default: all]
+    --imbalances=<imbalances>                       List of severities of data imbalance to use per imbalance type. [default: 0.1,1,5,10]
+    --algorithms=<algorithms>                       List of algorithms to run. [default: all]
+    --rounds=<rounds>                               Number of federated learning rounds. [default: 100]
+    --epochs=<epochs>                               Number of epochs per round. [default: 5]
+    --penalty=<penalty>                             Factor µ for the proximal term. (FedProx) [default: 0.1]
+    --clusters=<clusters>                           Number of clusters. [default: 3]
+    --n-clients=<n-clients>                         Number of clients. [default: 100]
+    --clients-per-round=<clients-per-round>         Fraction of clients selected for training per round. [default: 0.8]
+    --clusters-per-client=<clusters-per-client>     Maximum number of clusters that a client is assigned to. [default: 2]
 
-    --resume=<run_id>                           Resume training from a previous run. [default:]
-    --cpu                                       Use CPU only. [default: False]
-    --dry-run                                   Generate configs only, without training.
-    --verbose                                   Print debug info
+    --resume=<run_id>                               Resume training from a previous run. [default:]
+    --seed=<seed>                                   A seed to make training reproducible. [default: 42]
+    --cpu                                           Use CPU only. [default: False]
+    --dry-run                                       Generate configs only, without training.
+    --verbose                                       Print debug info
 
-    --list-algorithms                           List all implemented algorithms.
-    --list-datasets                             List all implemented datasets.
+    --list-algorithms                               List all implemented algorithms.
+    --list-datasets                                 List all implemented datasets.
 
-    --version                                   Show version
-    -h --help                                   Show this screen
+    --version                                       Show version
+    -h --help                                       Show this screen
 """
 import functools
 import logging
+import random
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import jsonpickle
+import numpy as np
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
@@ -281,8 +284,8 @@ def run_global(run_config: RunConfig, train_data, test_data, device: str = "cpu"
 
 
 @functools.cache
-def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float):
-    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value)
+def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float, seed: int):
+    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed)
 
 
 def main():
@@ -290,6 +293,14 @@ def main():
     verbose = arguments["--verbose"]
     if verbose:
         logger.setLevel(logging.DEBUG)
+
+    logger.debug(arguments)
+
+    seed = int(arguments["--seed"])
+    logger.debug(f"Using seed: {seed}")
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.random.manual_seed(seed)
 
     if arguments["--list-algorithms"]:
         print("\n".join(ALL_ALGORITHMS))
@@ -350,7 +361,7 @@ def main():
         if not conf_filename.is_file():
             if not arguments["--dry-run"]:
                 train_data, test_data = get_data_for_config(config.dataset, config.n_clients, config.imbalance_type,
-                                                            config.imbalance_value)
+                                                            config.imbalance_value, seed)
                 results = run(config, train_data, test_data, device=device)
                 results_df = results.as_dataframe()
                 results_df.to_csv(outdir / (filename + ".csv"), index=False)
@@ -369,13 +380,13 @@ def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]
     return [create_dataloader(d, batch_size) for d in datasets]
 
 
-def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1):
+def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42):
     """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
     train = dataset(DATA_DIR).train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
-    train_datasets = imbalance_fn(train, n, alpha)
+    train_datasets = imbalance_fn(train, n, alpha, seed=seed)
 
-    train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE)
+    train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE, seed=seed)
 
     return datasets_to_dataloaders(train_datasets), datasets_to_dataloaders(test_datasets)
 

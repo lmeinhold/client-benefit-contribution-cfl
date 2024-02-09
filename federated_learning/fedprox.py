@@ -37,7 +37,7 @@ class FedProx:
                                                                                                 float) else self.clients_per_round
 
         model = self.model_class().to(self.device)
-        # model = torch.compile(model=model, mode="reduce-overhead")
+        # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
         global_weights = dict(model.named_parameters())
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
@@ -91,8 +91,6 @@ class FedProx:
         return dict(model.named_parameters()), np.array(round_train_losses)
 
     def _test_client_round(self, model, client_test_data):
-        n_samples = len(client_test_data.dataset)
-
         round_loss = 0
         round_y_pred, round_y_true = [], []
 
@@ -137,7 +135,7 @@ class FedProx:
 
         return epoch_loss / len(client_train_data)
 
-    # @torch.compile(mode="reduce-overhead")
+    @torch.compile(mode="reduce-overhead")
     def _proximal_term(self, old_state, new_state):
         proximal_loss = 0
         for w, w_t in zip(old_state, new_state):

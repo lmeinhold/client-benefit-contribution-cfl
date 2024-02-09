@@ -2,24 +2,32 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, random_split, Subset
 
+
+def generator_with_seed(seed: int) -> torch.Generator:
+    return torch.Generator().manual_seed(seed)
+
+
 def extract_raw_data(dataset: Dataset) -> tuple[np.ndarray, np.ndarray]:
     labels = np.array(dataset.targets)
     features = np.array(dataset.data)
     return features, labels
 
 
-def split_dataset_equally(dataset: Dataset, n: int, *args, **kwargs):
+def split_dataset_equally(dataset: Dataset, n: int, seed: int, *args, **kwargs):
     """Split a dataset into n parts of equal length"""
-    return random_split(dataset=dataset, lengths=np.repeat(int(len(dataset) / n), n))
+    return random_split(dataset=dataset, lengths=np.repeat(int(len(dataset) / n), n),
+                        generator=generator_with_seed(seed))
 
 
-def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1,*args, **kwargs) -> list[
+def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> list[
     Dataset]:
     """Split a dataset into n datasets with varying size following a dirichlet distribution"""
     n = len(dataset)
 
     indices = np.random.permutation(n)
 
+    if seed is not None:
+        np.random.seed(seed)
     proportions = np.random.dirichlet(np.repeat(alpha, n_clients))
     proportions /= proportions.sum()
     proportions = (np.cumsum(proportions) * n).astype(int)[:-1]
@@ -32,7 +40,7 @@ def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1,
     return [Subset(dataset, batch_indices[i]) for i, idx in enumerate(batch_indices)]
 
 
-def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, *args, **kwargs):
+def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs):
     features, labels = extract_raw_data(dataset)
 
     n = len(dataset)
@@ -40,6 +48,8 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
 
     batch_indices = [[] for _ in range(n_clients)]
 
+    if seed is not None:
+        np.random.seed(seed)
     # iterate all classes
     for idx_class in range(n_classes):
         idx_k = np.where(labels == idx_class)[0]
@@ -65,13 +75,13 @@ def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 7):
             batch_indices[largest_client_index] = batch_indices[largest_client_index][:-transfer]
 
 
-def train_test_split(datasets, p_test=0.2):
+def train_test_split(datasets, p_test=0.2, seed: int = 42):
     """Split a list of datasets into a list of train datasets and a list of test datasets"""
 
     train_sets = []
     test_sets = []
     for ds in datasets:
-        split = random_split(ds, [(1 - p_test), p_test])
+        split = random_split(ds, [(1 - p_test), p_test], generator=generator_with_seed(seed))
         train_sets.append(split[0])
         test_sets.append(split[1])
     return train_sets, test_sets

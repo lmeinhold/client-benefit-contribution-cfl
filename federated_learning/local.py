@@ -22,7 +22,7 @@ class LocalModels(FederatedLearningAlgorithm):
         n_clients = len(train_data)
 
         shared_model = self.model_class().to(self.device)
-        # shared_model = torch.compile(model=shared_model, mode="reduce-overhead")
+        # shared_model = torch.compile(model=shared_model, mode="reduce-overhead", dynamic=True)
 
         init_state = dict(shared_model.named_parameters())
 
