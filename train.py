@@ -360,7 +360,7 @@ def main():
             if not arguments["--dry-run"]:
                 train_data, test_data = get_data_for_config(config.dataset, config.n_clients, config.imbalance_type,
                                                             config.imbalance_value, seed,
-                                                            logfile=(outdir / (filename + "data.csv")))
+                                                            logfile=(outdir / (run_id + "_data.csv")))
                 results = run(config, train_data, test_data, device=device)
                 results_df = results.as_dataframe()
                 results_df.to_csv(outdir / (filename + ".csv"), index=False)
