@@ -17,7 +17,7 @@ Options:
     --penalty=<penalty>                             Factor µ for the proximal term. (FedProx) [default: 0.1]
     --clusters=<clusters>                           Number of clusters. [default: 3]
     --n-clients=<n-clients>                         Number of clients. [default: 100]
-    --clients-per-round=<clients-per-round>         Fraction of clients selected for training per round. [default: 0.8]
+    --clients-per-round=<clients-per-round>         Fraction of clients selected for training per round. [default: 1.0]
     --clusters-per-client=<clusters-per-client>     Maximum number of clusters that a client is assigned to. [default: 2]
 
     --resume=<run_id>                               Resume training from a previous run. [default:]
