@@ -34,6 +34,7 @@ Options:
 """
 import functools
 import logging
+import os.path
 import random
 import sys
 from dataclasses import dataclass
@@ -42,6 +43,7 @@ from pathlib import Path
 
 import jsonpickle
 import numpy as np
+import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
@@ -51,12 +53,13 @@ from tqdm.auto import tqdm
 
 import models.cifar as cifar_models
 import models.mnist as mnist_models
-from experiments.datasets.base import create_dataloader
-from experiments.datasets.cifar import CIFAR10
-from experiments.datasets.emnist import EMNIST
-from experiments.datasets.imbalancing import split_dataset_equally, split_with_quantity_skew, \
+from datasets.base import create_dataloader
+from datasets.cifar import CIFAR10
+from datasets.emnist import EMNIST
+from datasets.imbalancing.imbalancing import split_dataset_equally, split_with_quantity_skew, \
     split_with_label_distribution_skew, train_test_split
-from experiments.datasets.mnist import MNIST
+from datasets.imbalancing.stats import li_ldi_qi
+from datasets.mnist import MNIST
 from federated_learning.fedprox import FedProx
 from federated_learning.flsc import FLSC
 from federated_learning.local import LocalModels
@@ -66,7 +69,7 @@ from utils.torchutils import get_device
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("train.py")
 
-ALL_ALGORITHMS = ["FedAvg", "FedProx", "IFCA", "FLSC", "Local", "Global"]
+ALL_ALGORITHMS = ["FedAvg", "FedProx", "IFCA", "FLSC", "Local"]
 ALL_DATASETS = ["mnist", "cifar10"]
 ALL_DATA_IMBALANCES = ["iid", "quantity_distribution", "label_distribution"]
 
@@ -283,11 +286,6 @@ def run_global(run_config: RunConfig, train_data, test_data, device: str = "cpu"
     raise NotImplementedError()
 
 
-@functools.cache
-def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float, seed: int):
-    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed)
-
-
 def main():
     arguments = docopt(__doc__, version="Model Training 1.0")
     verbose = arguments["--verbose"]
@@ -361,7 +359,8 @@ def main():
         if not conf_filename.is_file():
             if not arguments["--dry-run"]:
                 train_data, test_data = get_data_for_config(config.dataset, config.n_clients, config.imbalance_type,
-                                                            config.imbalance_value, seed)
+                                                            config.imbalance_value, seed,
+                                                            logfile=(outdir / (filename + "data.csv")))
                 results = run(config, train_data, test_data, device=device)
                 results_df = results.as_dataframe()
                 results_df.to_csv(outdir / (filename + ".csv"), index=False)
@@ -380,15 +379,38 @@ def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]
     return [create_dataloader(d, batch_size) for d in datasets]
 
 
-def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42):
+def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42, logfile: str = None):
     """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
     train = dataset(DATA_DIR).train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
-    train_datasets = imbalance_fn(train, n, alpha, seed=seed)
+    train_datasets = imbalance_fn(train, n, alpha=alpha, seed=seed)
+
+    if logfile is not None:
+        log_imbalances(logfile, dataset, imbalance, alpha, train_datasets)
 
     train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE, seed=seed)
 
     return datasets_to_dataloaders(train_datasets), datasets_to_dataloaders(test_datasets)
+
+
+def log_imbalances(filename, dataset_name, imbalance_type, imbalance_value, datasets):
+    li, ldi, qi = li_ldi_qi(datasets)
+    df = pd.DataFrame({
+        "dataset": dataset_name,
+        "client": range(len(li)),
+        "imbalance_type": imbalance_type,
+        "imbalance_value": imbalance_value,
+        "label_imbalance": li,
+        "label_distribution_imbalance": ldi,
+        "quantity_imbalance": qi,
+    })
+    df.to_csv(filename, index=False, mode="a", header=not os.path.exists(filename))
+
+
+@functools.cache
+def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float, seed: int,
+                        logfile: str):
+    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed, logfile)
 
 
 def generate_configs(algorithms, n_clients, clients_per_round, clusters, clusters_per_client, datasets, epochs, penalty,
