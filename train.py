@@ -381,12 +381,13 @@ def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]
 
 def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42, logfile: str = None):
     """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
-    train = dataset(DATA_DIR).train_data()
+    ds = dataset(DATA_DIR)
+    train = ds.train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
     train_datasets = imbalance_fn(train, n, alpha=alpha, seed=seed)
 
     if logfile is not None:
-        log_imbalances(logfile, dataset.get_name().lower(), imbalance, alpha, train_datasets)
+        log_imbalances(logfile, ds.get_name().lower(), imbalance, alpha, train_datasets)
 
     train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE, seed=seed)
 
