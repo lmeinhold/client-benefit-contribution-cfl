@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import torch
 from sklearn.metrics import f1_score
@@ -36,6 +38,9 @@ class LocalModels(FederatedLearningAlgorithm):
                 for e in range(self.epochs):
                     train_loss += self._train_client_epoch(shared_model, train_data[k], optimizer)
 
+                if train_loss is None or np.isnan(train_loss):
+                    warnings.warn(f"Train loss is undefined for client {k} in round {t}")
+
                 self.results.write(
                     round=r,
                     client=str(k),
@@ -46,6 +51,10 @@ class LocalModels(FederatedLearningAlgorithm):
 
                 if test_data is not None:
                     test_loss, f1 = self._test_client_epoch(shared_model, test_data[k])
+                    if test_loss is None or np.isnan(test_loss):
+                        warnings.warn(f"Test loss is undefined for client {k} in round {t}")
+                    if f1 is None or np.isnan(f1):
+                        warnings.warn(f"F1 is undefined for client {k} in round {t}")
                     self.results.write(
                         round=r,
                         client=str(k),

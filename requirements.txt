@@ -8,3 +8,4 @@ seaborn
 tqdm
 docopt
 jsonpickle
+scipy

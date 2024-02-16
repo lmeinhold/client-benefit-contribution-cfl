@@ -1,6 +1,7 @@
 """Different metrics for measuring data imbalance for each client"""
 
 import numpy as np
+from scipy.spatial import distance
 from torch.utils.data import Dataset
 
 
@@ -32,9 +33,7 @@ def label_imbalances(vjs: np.ndarray) -> np.ndarray:
 
 def _label_distribution_imbalance(v_j: np.ndarray, V: np.ndarray) -> float:
     """Compute the label distribution imbalance for a single client"""
-    num = v_j.dot(V)
-    denom = np.linalg.norm(v_j, 2) * np.linalg.norm(V, 2)
-    return 1 - (num / denom)
+    return distance.cosine(v_j, V)
 
 
 def label_distribution_imbalances(vjs: np.ndarray, V: np.ndarray) -> np.ndarray:

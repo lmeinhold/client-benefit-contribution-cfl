@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import torch
 from sklearn.metrics import f1_score
@@ -14,7 +16,7 @@ class FedProx:
                  optimizer,
                  rounds: int,
                  epochs: int,
-                 clients_per_round: int | float = 1.0,
+                 clients_per_round: float = 1.0,
                  mu: float = 0.0,
                  device="cpu"):
         self.model_class = model_class
@@ -33,8 +35,7 @@ class FedProx:
         if isinstance(test_data, list) and len(test_data) != n_clients:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
-        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients)) if isinstance(self.clients_per_round,
-                                                                                                float) else self.clients_per_round
+        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients))
 
         model = self.model_class().to(self.device)
         # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
@@ -53,6 +54,13 @@ class FedProx:
                     client_weights, train_loss = self._train_client_round(global_weights, model, client_train_data)
 
                     test_loss, f1 = self._test_client_round(model, client_test_data)
+
+                    if train_loss is None or np.isnan(train_loss):
+                        warnings.warn(f"Train loss is undefined for client {k} in round {t}")
+                    if test_loss is None or np.isnan(test_loss):
+                        warnings.warn(f"Test loss is undefined for client {k} in round {t}")
+                    if f1 is None or np.isnan(f1):
+                        warnings.warn(f"F1 is undefined for client {k} in round {t}")
 
                     self.results.write(
                         round=t,

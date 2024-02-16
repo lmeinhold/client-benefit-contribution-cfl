@@ -76,6 +76,13 @@ class FLSC:
 
                     test_loss, f1 = self._test_client_round(model, client_test_data)
 
+                    if train_loss is None or np.isnan(train_loss):
+                        warnings.warn(f"Train loss is undefined for client {k} in round {t}")
+                    if test_loss is None or np.isnan(test_loss):
+                        warnings.warn(f"Test loss is undefined for client {k} in round {t}")
+                    if f1 is None or np.isnan(f1):
+                        warnings.warn(f"F1 is undefined for client {k} in round {t}")
+
                     self.results.write(
                         round=t,
                         client=str(k),
