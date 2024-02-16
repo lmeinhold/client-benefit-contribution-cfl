@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import SGD
+from torch.optim import SGD, AdamW
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -80,7 +80,7 @@ DATASETS = {
 }
 
 MODELS = {
-    "mnist": mnist_models.CNN,
+    "mnist": mnist_models.CNN_DC,
     "emnist": mnist_models.CNN,
     "cifar10": cifar_models.CNN,
 }
@@ -92,7 +92,7 @@ IMBALANCES = {
 }
 
 LOSS_FN = CrossEntropyLoss
-LR = 1e-2
+LR = 2e-3
 BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
