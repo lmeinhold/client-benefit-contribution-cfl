@@ -28,7 +28,7 @@ class CNN_DC(nn.Module):
         )
         self.output = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(3840, 50),
+            nn.Linear(8000, 50),
             nn.ReLU(),
             nn.Dropout(),
             nn.Linear(50, self.n_output_classes),

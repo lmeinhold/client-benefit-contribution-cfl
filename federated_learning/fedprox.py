@@ -31,11 +31,13 @@ class FedProx:
 
     def fit(self, train_data, test_data):
         n_clients = len(train_data)
+        client_data_lengths = np.asarray([len(dl.dataset) for dl in train_data])
 
         if isinstance(test_data, list) and len(test_data) != n_clients:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
         eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients))
+        print(f"Clients per round: {eff_clients_per_round}")
 
         model = self.model_class().to(self.device)
         # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
@@ -44,7 +46,7 @@ class FedProx:
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
             updated_weights = []
 
-            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round)
+            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
 
             for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
                 if k in chosen_client_indices:
@@ -77,7 +79,7 @@ class FedProx:
 
                     updated_weights.append(client_weights)
 
-            global_weights = average_parameters(updated_weights)
+            global_weights = average_parameters(updated_weights, client_data_lengths[chosen_client_indices])
 
         return self.results
 
