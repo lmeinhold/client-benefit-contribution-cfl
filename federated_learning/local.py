@@ -38,9 +38,6 @@ class LocalModels(FederatedLearningAlgorithm):
                 for e in range(self.epochs):
                     train_loss += self._train_client_epoch(shared_model, train_data[k], optimizer)
 
-                if train_loss is None or np.isnan(train_loss):
-                    warnings.warn(f"Train loss is undefined for client {k} in round {t}")
-
                 self.results.write(
                     round=r,
                     client=str(k),

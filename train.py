@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import SGD, AdamW
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -81,8 +81,8 @@ DATASETS = {
 
 MODELS = {
     "mnist": mnist_models.CNN_DC,
-    "emnist": mnist_models.CNN,
-    "cifar10": cifar_models.CNN,
+    "emnist": mnist_models.CNN_DC,
+    "cifar10": cifar_models.CNN_DC,
 }
 
 IMBALANCES = {
@@ -92,7 +92,7 @@ IMBALANCES = {
 }
 
 LOSS_FN = CrossEntropyLoss
-LR = 2e-3
+LR = 1e-3
 BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
@@ -101,7 +101,8 @@ DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
-    return SGD(params, LR)
+    # return SGD(params, LR)
+    return Adam(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:

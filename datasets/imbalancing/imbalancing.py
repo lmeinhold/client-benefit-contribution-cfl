@@ -66,7 +66,7 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
     return [Subset(dataset, indices) for indices in batch_indices]
 
 
-def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 7):
+def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 5):
     largest_client_index = np.argmax([len(x) for x in batch_indices])
     for j in range(n_clients):
         if len(batch_indices[j]) < min_size:
