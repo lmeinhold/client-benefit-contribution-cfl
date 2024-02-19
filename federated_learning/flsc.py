@@ -52,7 +52,7 @@ class FLSC:
         global_weights = [dict(self.model_class().named_parameters()) for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
         client_models = [self.model_class().to(self.device) for _ in range(n_clients)]
-        optimizers = [self.optimizer_fn(m.parameters) for m in client_models]
+        optimizers = [self.optimizer_fn(m.parameters()) for m in client_models]
 
         # inital cluster identities
         cluster_identities = np.random.choice(np.arange(self.n_clusters), size=[n_clients, self.clusters_per_client])
