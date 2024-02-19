@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import SGD
+from torch.optim import AdamW
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -93,7 +93,7 @@ IMBALANCES = {
 
 LOSS_FN = CrossEntropyLoss
 LR = 1e-3
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
 OUTPUT_DIR = "./output/"
@@ -101,7 +101,7 @@ DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
-    return SGD(params, LR)
+    return AdamW(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:
@@ -242,7 +242,7 @@ def run_fedprox(run_config: FedProxConfig, train_data, test_data, device: str = 
     fedprox = FedProx(
         model_class=MODELS[run_config.dataset],
         loss=LOSS_FN(),
-        optimizer=create_optimizer,
+        optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
         clients_per_round=run_config.clients_per_round,
@@ -257,7 +257,7 @@ def run_flsc(run_config: FlscConfig, train_data, test_data, device: str = "cpu")
     flsc = FLSC(
         model_class=MODELS[run_config.dataset],
         loss=LOSS_FN(),
-        optimizer=create_optimizer,
+        optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
         n_clusters=run_config.clusters,

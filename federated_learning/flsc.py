@@ -20,7 +20,7 @@ class FLSC:
     def __init__(self,
                  model_class,
                  loss,
-                 optimizer,
+                 optimizer_fn,
                  rounds: int,
                  epochs: int,
                  n_clusters: int,
@@ -29,7 +29,7 @@ class FLSC:
                  device="cpu"):
         self.model_class = model_class
         self.loss = loss
-        self.optimizer = optimizer
+        self.optimizer_fn = optimizer_fn
         self.rounds = rounds
         self.epochs = epochs
         self.n_clusters = n_clusters
@@ -51,8 +51,8 @@ class FLSC:
         # initial model weights
         global_weights = [dict(self.model_class().named_parameters()) for _ in
                           range(self.n_clusters)]  # copy global weights before models are (re-)used
-        model = self.model_class().to(self.device)
-        # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
+        client_models = [self.model_class().to(self.device) for _ in range(n_clients)]
+        optimizers = [self.optimizer_fn(m.parameters) for m in client_models]
 
         # inital cluster identities
         cluster_identities = np.random.choice(np.arange(self.n_clusters), size=[n_clients, self.clusters_per_client])
@@ -68,13 +68,15 @@ class FLSC:
                     client_test_data = test_data[k] if isinstance(test_data, list) else test_data
 
                     if t > 0:
-                        cluster_identities[k] = self._update_cluster_identity_estimates(global_weights, model,
+                        cluster_identities[k] = self._update_cluster_identity_estimates(global_weights,
+                                                                                        client_models[k],
                                                                                         client_train_data)
 
-                    client_weights, train_loss = self._train_client_round(global_weights, model, cluster_identities[k],
+                    client_weights, train_loss = self._train_client_round(global_weights, client_models[k],
+                                                                          optimizers[k], cluster_identities[k],
                                                                           client_train_data)
 
-                    test_loss, f1 = self._test_client_round(model, client_test_data)
+                    test_loss, f1 = self._test_client_round(client_models[k], client_test_data)
 
                     if test_loss is None or np.isnan(test_loss):
                         warnings.warn(f"Test loss is undefined for client {k} in round {t}")
@@ -105,14 +107,13 @@ class FLSC:
 
         return self.results
 
-    def _train_client_round(self, global_weights: list[StateDict], model, cluster_identities, client_train_data) -> \
+    def _train_client_round(self, global_weights: list[StateDict], model, optimizer, cluster_identities, client_train_data) -> \
             tuple[
                 StateDict, np.ndarray]:
 
         fused_weights = _fuse_model_weights(global_weights, cluster_identities)
 
         model.load_state_dict(fused_weights, strict=False)
-        optimizer = self.optimizer(model.parameters())
 
         model.train()
 
@@ -144,7 +145,7 @@ class FLSC:
         return new_identities
 
     @staticmethod
-    def get_new_cluster_identities_from_losses(cluster_losses: np.ndarray|list[float], n: int) -> np.ndarray:
+    def get_new_cluster_identities_from_losses(cluster_losses: np.ndarray | list[float], n: int) -> np.ndarray:
         return np.argsort(cluster_losses)[:n]
 
     def _test_client_round(self, model, client_test_data):

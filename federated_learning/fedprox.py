@@ -13,7 +13,7 @@ class FedProx:
     def __init__(self,
                  model_class,
                  loss,
-                 optimizer,
+                 optimizer_fn,
                  rounds: int,
                  epochs: int,
                  clients_per_round: float = 1.0,
@@ -21,7 +21,7 @@ class FedProx:
                  device="cpu"):
         self.model_class = model_class
         self.loss = loss
-        self.optimizer = optimizer
+        self.optimizer_fn = optimizer_fn
         self.rounds = rounds
         self.epochs = epochs
         self.clients_per_round = clients_per_round
@@ -39,9 +39,12 @@ class FedProx:
         eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients))
         print(f"Clients per round: {eff_clients_per_round}")
 
-        model = self.model_class().to(self.device)
+        model = self.model_class()
         # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
         global_weights = dict(model.named_parameters())
+        del model
+        client_models = [self.model_class().to(self.device) for _ in range(n_clients)]
+        optimizers = [self.optimizer_fn(m.parameters()) for m in client_models]
 
         for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
             updated_weights = []
@@ -53,9 +56,10 @@ class FedProx:
                     client_train_data = train_data[k]
                     client_test_data = test_data[k] if isinstance(test_data, list) else test_data
 
-                    client_weights, train_loss = self._train_client_round(global_weights, model, client_train_data)
+                    client_weights, train_loss = self._train_client_round(global_weights, client_models[k],
+                                                                          optimizers[k], client_train_data)
 
-                    test_loss, f1 = self._test_client_round(model, client_test_data)
+                    test_loss, f1 = self._test_client_round(client_models[k], client_test_data)
 
                     if test_loss is None or np.isnan(test_loss):
                         warnings.warn(f"Test loss is undefined for client {k} in round {t}")
@@ -83,15 +87,13 @@ class FedProx:
 
         return self.results
 
-    def _train_client_round(self, global_weights, model, client_train_data) -> tuple[StateDict, np.ndarray]:
+    def _train_client_round(self, global_weights, model, optimizer, client_train_data) -> tuple[StateDict, np.ndarray]:
         model.load_state_dict(dict(global_weights), strict=False)
         global_params = model.parameters()
-        optimizer = self.optimizer(model.parameters())
 
         model.train()
 
         round_train_losses = []
-
         for e in range(self.epochs):
             round_train_loss = self._train_epoch(model, optimizer, client_train_data, global_params)
             round_train_losses.append(round_train_loss)
