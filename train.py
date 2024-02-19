@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import Adam
+from torch.optim import SGD
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -93,7 +93,7 @@ IMBALANCES = {
 
 LOSS_FN = CrossEntropyLoss
 LR = 1e-3
-BATCH_SIZE = 64
+BATCH_SIZE = 128
 TEST_SIZE = 0.2
 
 OUTPUT_DIR = "./output/"
@@ -101,8 +101,7 @@ DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
-    # return SGD(params, LR)
-    return Adam(params, LR)
+    return SGD(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:

@@ -40,7 +40,7 @@ class FLSC:
 
     def fit(self, train_data, test_data):
         n_clients = len(train_data)
-        train_dataset_sizes = np.asarray([len(dl.dataset) for dl in train_data])
+        train_dataset_sizes = np.asarray([len(dl.dataset) for dl in train_data], dtype=np.double)
 
         if isinstance(test_data, list) and len(test_data) != n_clients:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")

@@ -25,15 +25,14 @@ def tensor_weighted_mean(tensors, weights):
     """Calculate the weighted mean of a list of tensors"""
     assert len(tensors) == len(weights), \
         f"Length of state_dicts ({len(tensors)}) does not match length of weights ({len(weights)})"
-    return torch.stack([tensors[i] * weights[i] for i in range(len(tensors))]).sum(dim=0) / weights.sum()
+    weight_sum = weights.sum()
+    return torch.stack([tensors[i] * weights[i] for i in range(len(tensors))]).sum(dim=0).div(weight_sum)
 
 
 def collect_state_dicts(state_dicts: list[StateDict]) -> dict[str, list[torch.Tensor]]:
     """Turn a list of state dicts into a dict of lists of weights"""
     aggregated_state_dict = {}
-    for state_gen in state_dicts:
-        state_dict = state_gen if isinstance(state_gen, dict) else dict(
-            state_gen)  # ensure state_dict is actually a dict
+    for state_dict in state_dicts:
         for k in state_dict.keys():
             if k in aggregated_state_dict:
                 aggregated_state_dict[k].append(state_dict[k])

@@ -28,10 +28,10 @@ class CNN_DC(nn.Module):
         )
         self.output = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(8000, 50),
+            nn.Linear(8000, 256),
             nn.ReLU(),
             nn.Dropout(),
-            nn.Linear(50, self.n_output_classes),
+            nn.Linear(256, self.n_output_classes),
         )
 
     def forward(self, x):
