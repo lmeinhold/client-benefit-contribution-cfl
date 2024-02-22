@@ -46,7 +46,7 @@ class FedProx:
         client_models = [self.model_class().to(self.device) for _ in range(n_clients)]
         optimizers = [self.optimizer_fn(m.parameters()) for m in client_models]
 
-        for t in tqdm(np.arange(self.rounds) + 1, desc="Round", position=0):
+        for t in tqdm(np.arange(self.rounds), desc="Round", position=0):
             updated_weights = []
 
             chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
