@@ -23,20 +23,17 @@ class LocalModels(FederatedLearningAlgorithm):
     def fit(self, train_data: list[DataLoader], test_data: list[DataLoader] = None) -> ResultsWriter:
         n_clients = len(train_data)
 
-        shared_model = self.model_class().to(self.device)
-        # shared_model = torch.compile(model=shared_model, mode="reduce-overhead", dynamic=True)
-
-        init_state = dict(shared_model.named_parameters())
+        init_state = dict(self.model_class().named_parameters())
 
         for k in tqdm(range(n_clients), desc="Clients", position=1):
-            shared_model.load_state_dict(init_state, strict=False)  # reset state
-
-            optimizer = self.optimizer(shared_model.parameters())
+            model = self.model_class().to(self.device)
+            model.load_state_dict(init_state, strict=False)  # reset state
+            optimizer = self.optimizer(model.parameters())
 
             for r in range(self.rounds):
                 train_loss = 0
                 for e in range(self.epochs):
-                    train_loss += self._train_client_epoch(shared_model, train_data[k], optimizer)
+                    train_loss += self._train_client_epoch(model, train_data[k], optimizer)
 
                 self.results.write(
                     round=r,
@@ -47,7 +44,7 @@ class LocalModels(FederatedLearningAlgorithm):
                 )
 
                 if test_data is not None:
-                    test_loss, f1 = self._test_client_epoch(shared_model, test_data[k])
+                    test_loss, f1 = self._test_client_epoch(model, test_data[k])
                     if test_loss is None or np.isnan(test_loss):
                         warnings.warn(f"Test loss is undefined for client {k} in round {t}")
                     if f1 is None or np.isnan(f1):
