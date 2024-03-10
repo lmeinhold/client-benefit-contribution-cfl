@@ -1,3 +1,5 @@
+from pprint import pprint
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset, random_split, Subset
@@ -19,7 +21,8 @@ def split_dataset_equally(dataset: Dataset, n: int, seed: int, *args, **kwargs):
                         generator=generator_with_seed(seed))
 
 
-def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> list[
+def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> \
+list[
     Dataset]:
     """Split a dataset into n datasets with varying size following a dirichlet distribution"""
     n = len(dataset)
@@ -40,7 +43,32 @@ def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1,
     return [Subset(dataset, batch_indices[i]) for i, idx in enumerate(batch_indices)]
 
 
-def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs):
+def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, seed: int = None, *args, **kwargs) -> \
+list[Dataset]:
+    """Split a dataset into n subsets with exactly c different labels per client"""
+    _, labels = extract_raw_data(dataset)
+    n = len(labels)
+    classes = np.unique(labels).reshape(-1, 1)
+    n_classes = classes.shape[0]
+    if seed is not None:
+        np.random.seed(seed)
+
+    chosen_classes = [np.random.choice(np.arange(n_classes), c, replace=False) for _ in range(n_clients)]
+    batch_indices = [[] for _ in range(n_clients)]
+    for class_idx in np.arange(n_classes):
+        clients_for_class = np.asarray([i for i in range(n_clients) if classes[class_idx] in chosen_classes[i]])
+        class_idxs_in_dataset = np.asarray([i for i, l in enumerate(labels) if l == classes[class_idx]])
+        np.random.shuffle(class_idxs_in_dataset)
+        max_len = len(class_idxs_in_dataset) - (len(class_idxs_in_dataset) % len(clients_for_class))
+        split_idxs = np.split(class_idxs_in_dataset[:max_len], len(clients_for_class))
+        for client_idx, split_idx in zip(clients_for_class, split_idxs):
+            batch_indices[client_idx] += split_idx.tolist()
+
+    return [Subset(dataset, indices) for indices in batch_indices]
+
+
+def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,
+                                       **kwargs):
     features, labels = extract_raw_data(dataset)
 
     n = len(dataset)
