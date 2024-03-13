@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import AdamW
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -101,7 +101,7 @@ DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
-    return AdamW(params, LR)
+    return Adam(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:
@@ -423,6 +423,8 @@ def generate_configs(algorithms, n_clients, clients_per_round, clusters, cluster
             for algorithm in algorithms:
                 for n_clusters in clusters:
                     for n_clusters_per_client in clusters_per_client:
+                        if n_clusters_per_client >= n_clusters:  # clusters per client must be lower than number of clusters
+                            continue
                         for dataset in datasets:
                             for mu in penalty:
                                 configs.add(create_config(
