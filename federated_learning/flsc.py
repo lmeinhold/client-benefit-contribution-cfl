@@ -5,7 +5,8 @@ import torch
 from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
-from utils.results_writer import ResultsWriter, join_cluster_identities
+from federated_learning.base import FederatedLearningAlgorithm
+from utils.results_writer import join_cluster_identities
 from utils.torchutils import average_parameters, StateDict
 
 
@@ -13,30 +14,16 @@ def _fuse_model_weights(global_weights: list[StateDict], cluster_identities):
     return average_parameters([global_weights[c] for c in cluster_identities])
 
 
-class FLSC:
+class FLSC(FederatedLearningAlgorithm):
     """Federate Learning with Soft-Clustering (FLSC)
     Equivalent to Iterative Federated Clustering Algorithm (IFCA) if `clusters_per_client` is set to 1"""
 
-    def __init__(self,
-                 model_class,
-                 loss,
-                 optimizer_fn,
-                 rounds: int,
-                 epochs: int,
-                 n_clusters: int,
-                 clusters_per_client: int = 1,
-                 clients_per_round: int | float = 1.0,
+    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, n_clusters: int,
+                 loss_fn, clusters_per_client: int = 1, clients_per_round: float = 1.0,
                  device="cpu"):
-        self.model_class = model_class
-        self.loss = loss
-        self.optimizer_fn = optimizer_fn
-        self.rounds = rounds
-        self.epochs = epochs
+        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)
         self.n_clusters = n_clusters
         self.clusters_per_client = clusters_per_client
-        self.clients_per_round = clients_per_round
-        self.device = device
-        self.results = ResultsWriter()
 
     def fit(self, train_data, test_data):
         n_clients = len(train_data)
@@ -45,8 +32,7 @@ class FLSC:
         if isinstance(test_data, list) and len(test_data) != n_clients:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
-        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients)) \
-            if isinstance(self.clients_per_round, float) else self.clients_per_round
+        eff_clients_per_round = self.effective_clients_per_round(n_clients)
 
         # initial model weights
         global_weights = [dict(self.model_class().named_parameters()) for _ in
@@ -57,10 +43,10 @@ class FLSC:
         # inital cluster identities
         cluster_identities = np.random.choice(np.arange(self.n_clusters), size=[n_clients, self.clusters_per_client])
 
-        for t in tqdm(np.arange(self.rounds), desc="Round", position=0):
+        for t in tqdm(np.arange(self.rounds), desc="Round"):
             updated_weights = []
 
-            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
+            chosen_client_indices = self.choose_clients_for_round(n_clients, eff_clients_per_round)
 
             for k in np.arange(n_clients):
                 if k in chosen_client_indices:
@@ -107,14 +93,11 @@ class FLSC:
 
         return self.results
 
-    def _train_client_round(self, global_weights: list[StateDict], model, optimizer, cluster_identities, client_train_data) -> \
-            tuple[
-                StateDict, np.ndarray]:
+    def _train_client_round(self, global_weights: list[StateDict], model, optimizer, cluster_identities,
+                            client_train_data) -> tuple[StateDict, np.ndarray]:
 
         fused_weights = _fuse_model_weights(global_weights, cluster_identities)
-
         model.load_state_dict(fused_weights, strict=False)
-
         model.train()
 
         round_train_losses = []
@@ -137,7 +120,7 @@ class FLSC:
 
                 with torch.no_grad():
                     pred = model(X)
-                    loss += self.loss(pred, y).cpu().item()
+                    loss += self.loss_fn(pred, y).cpu().item()
 
             cluster_losses.append(loss / len(client_train_data))
 
@@ -160,7 +143,7 @@ class FLSC:
             with torch.no_grad():
                 pred = model(X)
 
-                batch_loss = self.loss(pred, y)
+                batch_loss = self.loss_fn(pred, y)
                 round_loss += batch_loss.cpu().item()
 
             round_y_pred.append(pred.argmax(1).detach().cpu())
@@ -181,7 +164,7 @@ class FLSC:
             X, y = X.to(self.device), y.to(self.device)
 
             pred = model(X)
-            loss = self.loss(pred, y)
+            loss = self.loss_fn(pred, y)
             epoch_loss += loss.cpu().item()
 
             loss.backward()

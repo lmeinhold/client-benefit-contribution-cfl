@@ -10,11 +10,12 @@ from federated_learning.base import FederatedLearningAlgorithm
 from utils.results_writer import ResultsWriter
 
 
-class LocalModels(FederatedLearningAlgorithm):
-    def __init__(self, model_class, loss, optimizer, rounds: int, epochs: int, device="cpu"):
+class LocalModels:
+    """Train local models for each client without federation"""
+    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, device="cpu"):
         self.model_class = model_class
         self.loss = loss
-        self.optimizer = optimizer
+        self.optimizer_fn = optimizer_fn
         self.rounds = rounds
         self.epochs = epochs
         self.device = device
@@ -28,7 +29,7 @@ class LocalModels(FederatedLearningAlgorithm):
         for k in tqdm(range(n_clients), desc="Clients", position=1):
             model = self.model_class().to(self.device)
             model.load_state_dict(init_state, strict=False)  # reset state
-            optimizer = self.optimizer(model.parameters())
+            optimizer = self.optimizer_fn(model.parameters())
 
             for r in range(self.rounds):
                 train_loss = 0
