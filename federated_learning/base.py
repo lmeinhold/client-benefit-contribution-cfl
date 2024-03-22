@@ -21,7 +21,7 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
     def __init__(self,
                  model_class: Type[nn.Module],
                  loss_fn: Type[nn.Module],
-                 optimizer_fn: Type[torch.optim],
+                 optimizer_fn,
                  rounds: int,
                  epochs: int,
                  clients_per_round: float = 1.0,
