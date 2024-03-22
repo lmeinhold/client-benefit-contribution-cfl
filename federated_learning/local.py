@@ -46,9 +46,9 @@ class LocalModels(FederatedLearningAlgorithm):
                 if test_data is not None:
                     test_loss, f1 = self._test_client_epoch(model, test_data[k])
                     if test_loss is None or np.isnan(test_loss):
-                        warnings.warn(f"Test loss is undefined for client {k} in round {t}")
+                        warnings.warn(f"Test loss is undefined for client {k} in round {r}")
                     if f1 is None or np.isnan(f1):
-                        warnings.warn(f"F1 is undefined for client {k} in round {t}")
+                        warnings.warn(f"F1 is undefined for client {k} in round {r}")
                     self.results.write(
                         round=r,
                         client=str(k),
