@@ -42,7 +42,7 @@ class CNN_DC(nn.Module):
 
 
 class CNN(nn.Module):
-    def __init__(self, n_output_classes=10):
+    def __init__(self, dropout=0.2, n_output_classes=10):
         super().__init__()
 
         self.n_output_classes = n_output_classes
@@ -54,7 +54,6 @@ class CNN(nn.Module):
                 kernel_size=5,
                 stride=1,
                 padding=0),
-            nn.BatchNorm2d(6),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.conv2 = nn.Sequential(
@@ -65,9 +64,9 @@ class CNN(nn.Module):
                 stride=1,
                 padding=0
             ),
-            nn.BatchNorm2d(16),
             nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout),
         )
         self.output = nn.Sequential(
             nn.Flatten(),
@@ -75,6 +74,7 @@ class CNN(nn.Module):
             nn.LeakyReLU(),
             nn.Linear(120, 84),
             nn.LeakyReLU(),
+            nn.Dropout(p=dropout),
             nn.Linear(84, self.n_output_classes))
 
     def forward(self, x):
@@ -141,26 +141,3 @@ class LargeCNN(nn.Module):
         x = self.conv2(x)
         x = self.output(x)
         return x
-
-
-class MLP(nn.Module):
-    def __init__(self, n_output_classes=10):
-        super().__init__()
-
-        self.n_output_classes = n_output_classes
-
-        self.m = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 256),
-            nn.LeakyReLU(),
-            # nn.BatchNorm1d(128),
-            nn.Dropout(0.8),
-            nn.Linear(256, 128),
-            nn.LeakyReLU(),
-            # nn.BatchNorm1d(128),
-            nn.Dropout(0.8),
-            nn.Linear(128, self.n_output_classes)
-        )
-
-    def forward(self, x):
-        return self.m(x)

@@ -47,7 +47,7 @@ import pandas as pd
 import torch
 from docopt import docopt
 from torch.nn import CrossEntropyLoss
-from torch.optim import AdamW
+from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
@@ -80,9 +80,9 @@ DATASETS = {
 }
 
 MODELS = {
-    "mnist": mnist_models.CNN_DC,
-    "emnist": mnist_models.CNN_DC,
-    "cifar10": cifar_models.CNN_DC,
+    "mnist": mnist_models.CNN,
+    "emnist": mnist_models.CNN,
+    "cifar10": cifar_models.CNN,
 }
 
 IMBALANCES = {
@@ -101,7 +101,7 @@ DATA_DIR = "/var/tmp"
 
 
 def create_optimizer(params):
-    return AdamW(params, LR)
+    return Adam(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:
@@ -273,7 +273,7 @@ def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu")
     local = LocalModels(
         model_class=MODELS[run_config.dataset],
         loss=LOSS_FN(),
-        optimizer=create_optimizer,
+        optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
         device=device
@@ -423,6 +423,8 @@ def generate_configs(algorithms, n_clients, clients_per_round, clusters, cluster
             for algorithm in algorithms:
                 for n_clusters in clusters:
                     for n_clusters_per_client in clusters_per_client:
+                        if n_clusters_per_client >= n_clusters:  # clusters per client must be lower than number of clusters
+                            continue
                         for dataset in datasets:
                             for mu in penalty:
                                 configs.add(create_config(

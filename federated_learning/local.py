@@ -10,11 +10,12 @@ from federated_learning.base import FederatedLearningAlgorithm
 from utils.results_writer import ResultsWriter
 
 
-class LocalModels(FederatedLearningAlgorithm):
-    def __init__(self, model_class, loss, optimizer, rounds: int, epochs: int, device="cpu"):
+class LocalModels:
+    """Train local models for each client without federation"""
+    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, device="cpu"):
         self.model_class = model_class
         self.loss = loss
-        self.optimizer = optimizer
+        self.optimizer_fn = optimizer_fn
         self.rounds = rounds
         self.epochs = epochs
         self.device = device
@@ -28,7 +29,7 @@ class LocalModels(FederatedLearningAlgorithm):
         for k in tqdm(range(n_clients), desc="Clients", position=1):
             model = self.model_class().to(self.device)
             model.load_state_dict(init_state, strict=False)  # reset state
-            optimizer = self.optimizer(model.parameters())
+            optimizer = self.optimizer_fn(model.parameters())
 
             for r in range(self.rounds):
                 train_loss = 0
@@ -46,9 +47,9 @@ class LocalModels(FederatedLearningAlgorithm):
                 if test_data is not None:
                     test_loss, f1 = self._test_client_epoch(model, test_data[k])
                     if test_loss is None or np.isnan(test_loss):
-                        warnings.warn(f"Test loss is undefined for client {k} in round {t}")
+                        warnings.warn(f"Test loss is undefined for client {k} in round {r}")
                     if f1 is None or np.isnan(f1):
-                        warnings.warn(f"F1 is undefined for client {k} in round {t}")
+                        warnings.warn(f"F1 is undefined for client {k} in round {r}")
                     self.results.write(
                         round=r,
                         client=str(k),

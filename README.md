@@ -1,6 +1,15 @@
 [![pipeline status](https://gitlab.com/bowerick/masterthesis-clustered-fl/badges/main/pipeline.svg)](https://gitlab.com/bowerick/masterthesis-clustered-fl/-/commits/main) ![coverage](https://gitlab.com/bowerick/masterthesis-clustered-fl/badges/main/coverage.svg?job=test)
 
 # Client Benefit and Contribution in Clustered Federated Learning
+## Setup
+```shell
+# Install dependencies needed for model training 
+pip install -r requirements.txt
+
+# Install additional dependencies for tests and utility scripts
+pip install -r requirements-dev.txt
+```
+
 ## How to Run
 ### Local
 Model training:

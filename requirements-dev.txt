@@ -1,5 +1,6 @@
 jupyter
 pytest
 pytest-cov
+pylint
 inquirer
 statsmodels

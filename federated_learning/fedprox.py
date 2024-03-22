@@ -5,53 +5,41 @@ import torch
 from sklearn.metrics import f1_score
 from tqdm.auto import tqdm
 
-from utils.results_writer import ResultsWriter
+from federated_learning.base import FederatedLearningAlgorithm
 from utils.torchutils import average_parameters, StateDict
 
 
-class FedProx:
-    def __init__(self,
-                 model_class,
-                 loss,
-                 optimizer_fn,
-                 rounds: int,
-                 epochs: int,
-                 clients_per_round: float = 1.0,
-                 mu: float = 0.0,
-                 device="cpu"):
-        self.model_class = model_class
-        self.loss = loss
-        self.optimizer_fn = optimizer_fn
-        self.rounds = rounds
-        self.epochs = epochs
-        self.clients_per_round = clients_per_round
+class FedProx(FederatedLearningAlgorithm):
+    """Federated Learning with Proximal Loss"""
+    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, loss_fn: Type[nn.Module],
+                 clients_per_round: float = 1.0, mu: float = 0.0, device="cpu"):
+        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)
         self.mu = mu
-        self.device = device
-        self.results = ResultsWriter()
 
-    def fit(self, train_data, test_data):
+    def fit(self, train_data, test_data, torch_compile=False):
         n_clients = len(train_data)
         client_data_lengths = np.asarray([len(dl.dataset) for dl in train_data], dtype=np.double)
 
         if isinstance(test_data, list) and len(test_data) != n_clients:
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
-        eff_clients_per_round = int(np.floor(self.clients_per_round * n_clients))
+        eff_clients_per_round = self.effective_clients_per_round(n_clients)
         print(f"Clients per round: {eff_clients_per_round}")
 
         model = self.model_class()
-        # model = torch.compile(model=model, mode="reduce-overhead", dynamic=True)
+        if torch_compile:
+            model = torch.compile(model=model, mode="reduce-overhead")
         global_weights = dict(model.named_parameters())
         del model
         client_models = [self.model_class().to(self.device) for _ in range(n_clients)]
         optimizers = [self.optimizer_fn(m.parameters()) for m in client_models]
 
-        for t in tqdm(np.arange(self.rounds), desc="Round", position=0):
+        for t in tqdm(np.arange(self.rounds), desc="Round"):
             updated_weights = []
 
-            chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
+            chosen_client_indices = self.choose_clients_for_round(n_clients, eff_clients_per_round)
 
-            for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
+            for k in np.arange(n_clients):
                 if k in chosen_client_indices:
                     client_train_data = train_data[k]
                     client_test_data = test_data[k] if isinstance(test_data, list) else test_data
@@ -112,7 +100,7 @@ class FedProx:
             with torch.no_grad():
                 pred = model(X)
 
-                batch_loss = self.loss(pred, y)
+                batch_loss = self.loss_fn(pred, y)
                 round_loss += batch_loss.cpu().item()
 
             round_y_pred.append(pred.argmax(1).detach().cpu())
@@ -129,14 +117,14 @@ class FedProx:
     def _train_epoch(self, model, optimizer, client_train_data, global_parameters):
         epoch_loss = 0
 
-        proximal_loss_term = 0 if self.mu == 0 else self._proximal_term(global_parameters, model.parameters())
-
         for X, y in client_train_data:
             X, y = X.to(self.device), y.to(self.device)
 
             pred = model(X)
+
             # calculate proximal term only if mu != 0 to speed up FedAvg
-            loss = self.loss(pred, y) + proximal_loss_term
+            proximal_loss_term = 0 if self.mu == 0 else self._proximal_term(global_parameters, model.parameters())
+            loss = self.loss_fn(pred, y) + proximal_loss_term
             epoch_loss += loss.cpu().item()
 
             loss.backward(retain_graph=True)
@@ -147,6 +135,7 @@ class FedProx:
 
     @torch.compile(mode="reduce-overhead")
     def _proximal_term(self, old_state, new_state):
+        """Calculate the proximal loss term, i.e. the L2 norm of the difference between current and global weights"""
         proximal_loss = 0
         for w, w_t in zip(old_state, new_state):
             proximal_loss += (w - w_t).norm(2)

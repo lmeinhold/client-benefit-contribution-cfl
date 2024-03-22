@@ -4,7 +4,7 @@ from torch import nn
 
 
 class CNN(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout=0.2):
         super().__init__()
         self.conv1 = nn.Sequential(
             nn.Conv2d(
@@ -13,7 +13,6 @@ class CNN(nn.Module):
                 kernel_size=5,
                 stride=1,
                 padding=0),
-            nn.BatchNorm2d(6),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2))
         self.conv2 = nn.Sequential(
@@ -24,15 +23,16 @@ class CNN(nn.Module):
                 stride=1,
                 padding=0
             ),
-            nn.BatchNorm2d(16),
             nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2, stride=2)
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Dropout(p=dropout),
         )
         self.output = nn.Sequential(
             nn.Flatten(),
             nn.Linear(400, 120),
             nn.LeakyReLU(),
             nn.Linear(120, 84),
+            nn.Dropout(p=dropout),
             nn.LeakyReLU(),
             nn.Linear(84, 10))
 
@@ -79,21 +79,3 @@ class CNN_DC(nn.Module):
         x = self.conv2(x)
         x = self.output(x)
         return x
-
-
-class MLP(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.m = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 128),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(128),
-            nn.Linear(128, 128),
-            nn.LeakyReLU(),
-            nn.BatchNorm1d(128),
-            nn.Linear(128, 10),
-        )
-
-    def forward(self, x):
-        return self.m(x)
