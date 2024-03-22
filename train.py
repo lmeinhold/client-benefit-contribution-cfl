@@ -80,9 +80,9 @@ DATASETS = {
 }
 
 MODELS = {
-    "mnist": mnist_models.CNN_DC,
-    "emnist": mnist_models.CNN_DC,
-    "cifar10": cifar_models.CNN_DC,
+    "mnist": mnist_models.CNN,
+    "emnist": mnist_models.CNN,
+    "cifar10": cifar_models.CNN,
 }
 
 IMBALANCES = {

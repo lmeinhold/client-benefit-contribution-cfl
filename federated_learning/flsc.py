@@ -62,7 +62,7 @@ class FLSC:
 
             chosen_client_indices = np.random.choice(np.arange(n_clients), size=eff_clients_per_round, replace=False)
 
-            for k in tqdm(np.arange(n_clients), desc="Client", position=1, leave=False):
+            for k in np.arange(n_clients):
                 if k in chosen_client_indices:
                     client_train_data = train_data[k]
                     client_test_data = test_data[k] if isinstance(test_data, list) else test_data
