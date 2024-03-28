@@ -18,7 +18,7 @@ class FLSC(FederatedLearningAlgorithm):
     """Federate Learning with Soft-Clustering (FLSC)
     Equivalent to Iterative Federated Clustering Algorithm (IFCA) if `clusters_per_client` is set to 1"""
 
-    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, n_clusters: int,
+    def __init__(self, model_class, optimizer_fn, rounds: int, epochs: int, n_clusters: int,
                  loss_fn, clusters_per_client: int = 1, clients_per_round: float = 1.0,
                  device="cpu"):
         super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)

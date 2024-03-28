@@ -34,14 +34,13 @@ Options:
 """
 import functools
 import logging
-import os.path
 import random
 import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import jsonpickle
+import duckdb
 import numpy as np
 import pandas as pd
 import torch
@@ -241,7 +240,7 @@ def run_fedprox(run_config: FedProxConfig, train_data, test_data, device: str = 
     """Run a single FedAvg or FedProx training run"""
     fedprox = FedProx(
         model_class=MODELS[run_config.dataset],
-        loss=LOSS_FN(),
+        loss_fn=LOSS_FN(),
         optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
@@ -256,7 +255,7 @@ def run_flsc(run_config: FlscConfig, train_data, test_data, device: str = "cpu")
     """Run a single IFCA or FLSC training run"""
     flsc = FLSC(
         model_class=MODELS[run_config.dataset],
-        loss=LOSS_FN(),
+        loss_fn=LOSS_FN(),
         optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
@@ -279,11 +278,6 @@ def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu")
         device=device
     )
     return local.fit(train_data, test_data)
-
-
-def run_global(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
-    """Train a global model for each dataset"""
-    raise NotImplementedError()
 
 
 def main():
@@ -350,68 +344,109 @@ def main():
     outdir = Path(OUTPUT_DIR)
     outdir.mkdir(parents=True, exist_ok=True)
 
+    dbpath = outdir / f"{run_id}.db"
+    conn = duckdb.connect(str(dbpath))
+
     sub_id = 0
     for config in tqdm(configs, "Run"):
         logger.debug(f"Running {config}")
-        filename = f"{run_id}_{sub_id}"
-        conf_filename = outdir / (filename + ".config.json")
 
-        if not conf_filename.is_file():
+        tables = get_tables(conn)
+        config_table_exists = "configurations" in tables
+        run_exists = config_table_exists and conn.sql(
+            f"SELECT COUNT(1) > 0 FROM configurations WHERE sub_id == {sub_id}").fetchone()[0]
+
+        if run_exists:
+            logger.info(f"Skipping {config.__dict__} because it already exists {config_table_exists} {run_exists}")
+        else:
             if not arguments["--dry-run"]:
                 train_data, test_data = get_data_for_config(config.dataset, config.n_clients, config.imbalance_type,
-                                                            config.imbalance_value, seed,
-                                                            logfile=(outdir / (run_id + "_data.csv")))
+                                                            config.imbalance_value, seed, conn)
+
                 results = run(config, train_data, test_data, device=device)
                 results_df = results.as_dataframe()
-                results_df.to_csv(outdir / (filename + ".csv"), index=False)
+                results_df["sub_id"] = sub_id
+
+                if "metrics" in tables:
+                    conn.append("metrics", results_df)
+                else:
+                    conn.sql("CREATE TABLE metrics AS SELECT * FROM results_df")
+
                 logger.debug(results_df.head())
 
-            with open(conf_filename, "w") as config_file:
-                config_file.write(jsonpickle.encode(config, unpicklable=False))
-                config_file.write("\n")
-        else:
-            logger.info(f"Skipping {filename} because it already exists")
+                config_df = pd.DataFrame(config.__dict__, index=[0])
+                config_df["sub_id"] = sub_id
+
+                if "configurations" in tables:
+                    conn.append("configurations", config_df)
+                else:
+                    conn.sql("CREATE TABLE configurations AS SELECT * FROM config_df")
 
         sub_id += 1
+
+    conn.close()
 
 
 def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]:
     return [create_dataloader(d, batch_size) for d in datasets]
 
 
-def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42, logfile: str = None):
+def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, seed: int = 42,
+                      conn: duckdb.DuckDBPyConnection = None):
     """Generate a set of train and test datasets from a given dataset, using the specified imbalance"""
     ds = dataset(DATA_DIR)
     train = ds.train_data()
     imbalance_fn = IMBALANCES[imbalance.lower()]
     train_datasets = imbalance_fn(train, n, alpha=alpha, seed=seed)
 
-    if logfile is not None:
-        log_imbalances(logfile, ds.get_name().lower(), imbalance, alpha, train_datasets)
+    if conn is not None:
+        log_imbalances(conn, ds.get_name().lower(), imbalance, alpha, train_datasets)
 
     train_datasets, test_datasets = train_test_split(train_datasets, TEST_SIZE, seed=seed)
 
     return datasets_to_dataloaders(train_datasets), datasets_to_dataloaders(test_datasets)
 
 
-def log_imbalances(filename, dataset_name, imbalance_type, imbalance_value, datasets):
+def get_tables(conn: duckdb.DuckDBPyConnection) -> list[str]:
+    return [r[0] for r in conn.sql("SHOW TABLES").fetchall()]
+
+
+def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance_type: str,
+                   imbalance_value: int | float, datasets):
     li, ldi, qi = li_ldi_qi(datasets)
+
     df = pd.DataFrame({
         "dataset": dataset_name,
-        "client": range(len(li)),
+        # "client": range(len(li)),
         "imbalance_type": imbalance_type,
         "imbalance_value": imbalance_value,
         "label_imbalance": li,
         "label_distribution_imbalance": ldi,
         "quantity_imbalance": qi,
     })
-    df.to_csv(filename, index=False, mode="a", header=not os.path.exists(filename))
+
+    if "data_distributions" in get_tables(conn):
+        sql_exists = """SELECT COUNT(1) > 0
+        FROM data_distributions d
+        WHERE
+            d.dataset = ?
+            AND d.imbalance_type = ?
+            AND d.imbalance_value = ?"""
+        combination_exists = conn.execute(sql_exists, [dataset_name, imbalance_type, imbalance_value]) \
+            .fetchone()[0]
+        if combination_exists:
+            logger.debug(
+                f"Not logging combination {dataset_name} {imbalance_type} {imbalance_value} because it already exists")
+        else:
+            conn.append("data_distributions", df)
+    else:
+        conn.sql("CREATE TABLE data_distributions AS SELECT * FROM df")
 
 
 @functools.cache
 def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float, seed: int,
-                        logfile: str):
-    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed, logfile)
+                        conn: duckdb.DuckDBPyConnection) -> tuple[list[DataLoader], list[DataLoader]]:
+    return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed, conn)
 
 
 def generate_configs(algorithms, n_clients, clients_per_round, clusters, clusters_per_client, datasets, epochs, penalty,

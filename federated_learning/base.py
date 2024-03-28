@@ -1,9 +1,6 @@
 import abc
-from typing import Type
 
 import numpy as np
-import torch
-from torch import nn
 
 from utils.results_writer import ResultsWriter
 
@@ -18,9 +15,10 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
         epochs: number of local model epochs per round
         clients_per_round: a fraction of clients to use per round [default: all clients]
         device: device to train the model on"""
+
     def __init__(self,
-                 model_class: Type[nn.Module],
-                 loss_fn: Type[nn.Module],
+                 model_class,
+                 loss_fn,
                  optimizer_fn,
                  rounds: int,
                  epochs: int,

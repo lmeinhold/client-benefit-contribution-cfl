@@ -11,7 +11,8 @@ from utils.torchutils import average_parameters, StateDict
 
 class FedProx(FederatedLearningAlgorithm):
     """Federated Learning with Proximal Loss"""
-    def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, loss_fn: Type[nn.Module],
+
+    def __init__(self, model_class, optimizer_fn, rounds: int, epochs: int, loss_fn,
                  clients_per_round: float = 1.0, mu: float = 0.0, device="cpu"):
         super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)
         self.mu = mu

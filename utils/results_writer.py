@@ -17,10 +17,6 @@ class ResultsWriter:
     def as_dataframe(self):
         return pd.DataFrame(self.metrics, columns=["round", "client", "stage", "variable", "value"])
 
-    def save(self, path):
-        df = self.as_dataframe()
-        df.to_csv(path, index=False)
-
 
 def join_cluster_identities(identities: np.ndarray) -> str:
     return "|".join(map(str, identities))
