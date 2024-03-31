@@ -21,7 +21,8 @@ from docopt import docopt
 import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
-pio.templates.default = "simple_white"
+
+pio.templates.default = "seaborn"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("eval.py")
@@ -33,11 +34,14 @@ NATURAL JOIN metrics
 NATURAL JOIN data_distributions
 """
 
+
 def get_runid_from_file(filename: str) -> str:
     return filename.split(".")[0]
 
+
 def single_col_to_list(results):
     return [row[0] for row in results]
+
 
 def main():
     arguments = docopt(__doc__, version='eval.py 1.0')
@@ -68,19 +72,40 @@ def main():
     for dataset in datasets:
         for imbalance_type in imbalance_types:
             for algorithm in algorithms:
-                logs_algorithm = conn.sql("SELECT * FROM logs WHERE dataset = dataset AND imbalance_type = imbalance_type AND algorithm = algorithm")
+                logs_algorithm = conn.sql("SELECT * FROM logs \
+                    WHERE dataset = dataset AND imbalance_type = imbalance_type AND algorithm = algorithm")
                 prefix_algorithm = f"{run_id}_{dataset}_{imbalance_type}_{algorithm}"
+
+                losses = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'loss'").df()
+                fig = px.box(losses, x="round", y="value", color="stage")
+                fig.write_image(outdir / f"{prefix_algorithm}_losses.png")
+
+                avg_losses = conn.sql("SELECT round, stage, avg(value) as loss FROM losses GROUP BY round, stage").df()
+                fig = px.line(avg_losses, x="round", y="loss", color="stage")
+                fig.write_image(outdir / f"{prefix_algorithm}_avg_losses.png")
+
+                f1_scores = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'f1'").df()
+                fig = px.box(f1_scores, x="round", y="value", color="stage")
+                fig.write_image(outdir / f"{prefix_algorithm}_f1scores.png")
+
+                avg_losses = conn.sql("SELECT round, stage, avg(value) as f1 FROM f1_scores GROUP BY round, stage").df()
+                fig = px.line(avg_losses, x="round", y="f1", color="stage")
+                fig.write_image(outdir / f"{prefix_algorithm}_avg_f1scores.png")
+
+
                 for imbalance_value in imbalance_values:
-                    logs_imbalance = conn.sql("SELECT * FROM logs_algorithm WHERE imbalance_value = imbalance_value").df()
+                    logs_imbalance = conn.sql(
+                        "SELECT * FROM logs_algorithm WHERE imbalance_value = imbalance_value").df()
                     prefix_imbalance = f"{prefix_algorithm}_{imbalance_value}"
 
-                    fig = px.histogram(logs_imbalance, x="label_imbalance", title="Label Imbalance", nbins=10)
+                    fig = px.histogram(logs_imbalance, x="label_imbalance", title="Label Imbalance", nbins=15)
                     fig.write_image(outdir / (prefix_imbalance + "_label_imbalance_hist.png"))
 
-                    fig = px.histogram(logs_imbalance, x="label_distribution_imbalance", title="Label Distribution Imbalance", nbins=10)
+                    fig = px.histogram(logs_imbalance, x="label_distribution_imbalance",
+                                       title="Label Distribution Imbalance", nbins=15)
                     fig.write_image(outdir / (prefix_imbalance + "_label_dist_imbalance_hist.png"))
 
-                    fig = px.histogram(logs_imbalance, x="quantity_imbalance", title="Quantity Imbalance", nbins=10)
+                    fig = px.histogram(logs_imbalance, x="quantity_imbalance", title="Quantity Imbalance", nbins=15)
                     fig.write_image(outdir / (prefix_imbalance + "_quantity_imbalance_hist.png"))
 
     conn.close()
