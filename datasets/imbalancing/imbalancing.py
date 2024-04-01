@@ -2,7 +2,7 @@ from pprint import pprint
 
 import numpy as np
 import torch
-from torch.utils.data import Dataset, random_split, Subset
+from torch.utils.data import Dataset, random_split, Subset, TensorDataset
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
@@ -10,6 +10,11 @@ def generator_with_seed(seed: int) -> torch.Generator:
 
 
 def extract_raw_data(dataset: Dataset) -> tuple[np.ndarray, np.ndarray]:
+    if isinstance(dataset, TensorDataset):
+        labels = np.asarray(dataset.tensors[1])
+        features = np.asarray(dataset.tensors[0])
+        return features, labels
+
     labels = np.array(dataset.targets)
     features = np.array(dataset.data)
     return features, labels

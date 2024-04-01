@@ -45,15 +45,17 @@ import numpy as np
 import pandas as pd
 import torch
 from docopt import docopt
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCELoss
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 import models.cifar as cifar_models
+import models.diabetes as diabetes_models
 import models.mnist as mnist_models
 from datasets.base import create_dataloader
 from datasets.cifar import CIFAR10
+from datasets.diabetes import Diabetes
 from datasets.emnist import EMNIST
 from datasets.imbalancing.imbalancing import split_dataset_equally, split_with_quantity_skew, \
     split_with_label_distribution_skew, train_test_split
@@ -76,12 +78,14 @@ DATASETS = {
     "mnist": MNIST,
     "cifar10": CIFAR10,
     "emnist": EMNIST,
+    "diabetes": Diabetes,
 }
 
 MODELS = {
     "mnist": mnist_models.CNN,
     "emnist": mnist_models.CNN,
     "cifar10": cifar_models.CNN,
+    "diabetes": diabetes_models.MLP,
 }
 
 IMBALANCES = {
@@ -90,13 +94,14 @@ IMBALANCES = {
     "label_distribution": split_with_label_distribution_skew,
 }
 
-LOSS_FN = CrossEntropyLoss
+LOSS_FN_MULTI = CrossEntropyLoss
+LOSS_FN_BINARY = BCELoss
 LR = 1e-3
 BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
 OUTPUT_DIR = "./output/"
-DATA_DIR = "/var/tmp"
+DATA_DIR = "./data"
 
 
 def create_optimizer(params):
@@ -219,6 +224,12 @@ def create_config(algorithm: str, dataset: str, rounds: int, epochs: int, n_clie
         raise Exception(f"Unknown algorithm '{algorithm}'")
 
 
+def get_loss(run_config: RunConfig):
+    if run_config.dataset.lower() == "diabetes":
+        return LOSS_FN_BINARY()
+    return LOSS_FN_MULTI()
+
+
 def run(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> ResultsWriter:
     """Perform a single training run based on the given config"""
     alg = run_config.algorithm.lower()
@@ -230,8 +241,6 @@ def run(run_config: RunConfig, train_data, test_data, device: str = "cpu") -> Re
         return run_flsc(run_config, train_data, test_data, device=device)
     elif alg == "local":
         return run_local(run_config, train_data, test_data, device=device)
-    elif alg == "global":
-        return run_global(run_config, train_data, test_data, device=device)
     else:
         raise Exception(f"Unknown algorithm")
 
@@ -240,7 +249,7 @@ def run_fedprox(run_config: FedProxConfig, train_data, test_data, device: str = 
     """Run a single FedAvg or FedProx training run"""
     fedprox = FedProx(
         model_class=MODELS[run_config.dataset],
-        loss_fn=LOSS_FN(),
+        loss_fn=get_loss(run_config),
         optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
@@ -255,7 +264,7 @@ def run_flsc(run_config: FlscConfig, train_data, test_data, device: str = "cpu")
     """Run a single IFCA or FLSC training run"""
     flsc = FLSC(
         model_class=MODELS[run_config.dataset],
-        loss_fn=LOSS_FN(),
+        loss_fn=get_loss(run_config),
         optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
@@ -271,7 +280,7 @@ def run_local(run_config: RunConfig, train_data, test_data, device: str = "cpu")
     """Train a local model for each client"""
     local = LocalModels(
         model_class=MODELS[run_config.dataset],
-        loss=LOSS_FN(),
+        loss=get_loss(run_config),
         optimizer_fn=create_optimizer,
         rounds=run_config.rounds,
         epochs=run_config.epochs,
@@ -382,10 +391,21 @@ def main():
                 config_df = pd.DataFrame(config.__dict__, index=[0])
                 config_df["sub_id"] = sub_id
 
-                if "configurations" in tables:
-                    conn.append("configurations", config_df)
-                else:
-                    conn.sql("CREATE TABLE configurations AS SELECT * FROM config_df")
+                conn.execute("""CREATE TABLE IF NOT EXISTS configurations (
+                    sub_id VARCHAR NOT NULL,
+                    algorithm VARCHAR NOT NULL,
+                    dataset VARCHAR NOT NULL,
+                    rounds INTEGER NOT NULL,
+                    epochs INTEGER NOT NULL,
+                    n_clients INTEGER NOT NULL,
+                    clients_per_round DOUBLE DEFAULT 1.0,
+                    imbalance_type VARCHAR,
+                    imbalance_value DOUBLE,
+                    penalty DOUBLE DEFAULT 0,
+                    clusters INTEGER DEFAULT NULL,
+                    clusters_per_client INTEGER DEFAULT NULL
+                )""")
+                conn.append("configurations", config_df, by_name=True)
 
         sub_id_n += 1
 
@@ -422,7 +442,7 @@ def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance
 
     df = pd.DataFrame({
         "dataset": dataset_name,
-        # "client": range(len(li)),
+        "client": range(len(li)),
         "imbalance_type": imbalance_type,
         "imbalance_value": imbalance_value,
         "label_imbalance": li,

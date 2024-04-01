@@ -14,6 +14,7 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
         rounds: number of federated learning rounds
         epochs: number of local model epochs per round
         clients_per_round: a fraction of clients to use per round [default: all clients]
+        binary: whether to perform binary instead of multiclass classification [default: False]
         device: device to train the model on"""
 
     def __init__(self,
@@ -23,6 +24,7 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
                  rounds: int,
                  epochs: int,
                  clients_per_round: float = 1.0,
+                 binary: bool = False,
                  device="cpu"):
         self.model_class = model_class
         self.loss_fn = loss_fn
@@ -31,6 +33,7 @@ class FederatedLearningAlgorithm(metaclass=abc.ABCMeta):
         self.epochs = epochs
         self.clients_per_round = clients_per_round
         self.device = device
+        self.binary = binary
         self.results = ResultsWriter()
 
     @abc.abstractmethod

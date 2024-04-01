@@ -10,3 +10,6 @@ docopt
 jsonpickle
 scipy
 duckdb
+plotly
+inquirer
+ucimlrepo
