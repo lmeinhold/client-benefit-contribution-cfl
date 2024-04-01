@@ -347,14 +347,15 @@ def main():
     dbpath = outdir / f"{run_id}.db"
     conn = duckdb.connect(str(dbpath))
 
-    sub_id = 0
+    sub_id_n = 0
     for config in tqdm(configs, "Run"):
+        sub_id = f"{run_id}_{sub_id_n}"
         logger.debug(f"Running {config}")
 
         tables = get_tables(conn)
         config_table_exists = "configurations" in tables
         run_exists = config_table_exists and conn.sql(
-            f"SELECT COUNT(1) > 0 FROM configurations WHERE sub_id == {sub_id}").fetchone()[0]
+            f"SELECT COUNT(1) > 0 FROM configurations WHERE configurations.sub_id = '{sub_id_n}'").fetchone()[0]
 
         if run_exists:
             logger.info(f"Skipping {config.__dict__} because it already exists {config_table_exists} {run_exists}")
@@ -364,15 +365,19 @@ def main():
                                                             config.imbalance_value, seed, conn)
 
                 results = run(config, train_data, test_data, device=device)
-                results_df = results.as_dataframe()
-                results_df["sub_id"] = sub_id
+                metrics_df, infos_df = results.as_dataframes()
+                metrics_df["sub_id"] = sub_id
+                infos_df["sub_id"] = sub_id
 
                 if "metrics" in tables:
-                    conn.append("metrics", results_df)
+                    conn.append("metrics", metrics_df)
                 else:
-                    conn.sql("CREATE TABLE metrics AS SELECT * FROM results_df")
+                    conn.sql("CREATE TABLE metrics AS SELECT * FROM metrics_df")
 
-                logger.debug(results_df.head())
+                if "infos" in tables:
+                    conn.append("infos", infos_df)
+                else:
+                    conn.sql("CREATE TABLE infos AS SELECT * FROM infos_df")
 
                 config_df = pd.DataFrame(config.__dict__, index=[0])
                 config_df["sub_id"] = sub_id
@@ -382,7 +387,7 @@ def main():
                 else:
                     conn.sql("CREATE TABLE configurations AS SELECT * FROM config_df")
 
-        sub_id += 1
+        sub_id_n += 1
 
     conn.close()
 

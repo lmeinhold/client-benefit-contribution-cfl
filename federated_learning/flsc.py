@@ -74,7 +74,7 @@ class FLSC(FederatedLearningAlgorithm):
                         client=str(k),
                         stage="train",
                         loss=train_loss.mean(),
-                        cluster_identities=join_cluster_identities(cluster_identities[k].tolist()),
+                        info=dict(cluster_identities=join_cluster_identities(cluster_identities[k].tolist())),
                         n_samples=len(client_train_data.dataset)
                     ).write(
                         round=t,
@@ -82,7 +82,7 @@ class FLSC(FederatedLearningAlgorithm):
                         stage="test",
                         loss=test_loss,
                         f1=f1,
-                        cluster_identities=join_cluster_identities(cluster_identities[k].tolist()),
+                        info=dict(cluster_identities=join_cluster_identities(cluster_identities[k].tolist())),
                         n_samples=len(client_test_data.dataset)
                     )
 
