@@ -19,10 +19,9 @@ import duckdb
 from docopt import docopt
 
 import plotly.express as px
-import plotly.graph_objects as go
+import plotly.graph_objs as go
 import plotly.io as pio
-
-pio.templates.default = "seaborn"
+pio.templates.default = "plotly_white"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("eval.py")
@@ -43,6 +42,10 @@ def single_col_to_list(results):
     return [row[0] for row in results]
 
 
+def save_plot(plot, path: str | Path):
+    plot.get_figure().savefig(path)
+
+
 def main():
     arguments = docopt(__doc__, version='eval.py 1.0')
     if arguments['--verbose']:
@@ -58,40 +61,54 @@ def main():
 
     run_id = get_runid_from_file(dbfile.name)
     logger.info(f"Evaluating run {run_id}")
-    conn = duckdb.connect(str(dbfile))
-
-    logs = conn.sql(SQL_ALL)
-
-    algorithms = single_col_to_list(conn.sql("SELECT DISTINCT algorithm FROM logs").fetchall())
-    datasets = single_col_to_list(conn.sql("SELECT DISTINCT dataset FROM logs").fetchall())
-    variables = single_col_to_list(conn.sql("SELECT DISTINCT variable FROM logs").fetchall())
-    imbalance_types = single_col_to_list(conn.sql("SELECT DISTINCT imbalance_type FROM logs").fetchall())
-    imbalance_values = single_col_to_list(conn.sql("SELECT DISTINCT imbalance_value FROM logs").fetchall())
-    # sub_ids = single_col_to_list(conn.sql("SELECT DISTINCT sub_id FROM logs").fetchall())
+    conn, logs, algorithms, datasets, imbalance_types, imbalance_values, penalties = read_data(dbfile)
 
     for dataset in datasets:
         for imbalance_type in imbalance_types:
             for algorithm in algorithms:
-                logs_algorithm = conn.sql("SELECT * FROM logs \
-                    WHERE dataset = dataset AND imbalance_type = imbalance_type AND algorithm = algorithm")
-                prefix_algorithm = f"{run_id}_{dataset}_{imbalance_type}_{algorithm}"
+                if algorithm.lower() == "fedprox":
+                    for penalty in penalties:
+                        logs_algorithm = conn.sql("SELECT * FROM logs WHERE logs.dataset = dataset AND logs.imbalance_type = logs.imbalance_type AND logs.algorithm = algorithm and logs.penalty = penalty")
+                        prefix_algorithm = f"{run_id}_{dataset}_{imbalance_type}_{algorithm}[{penalty}]"
 
-                losses = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'loss'").df()
-                fig = px.box(losses, x="round", y="value", color="stage")
-                fig.write_image(outdir / f"{prefix_algorithm}_losses.png")
+                        losses = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'loss' ORDER BY round").df()
+                        avg_losses = conn.sql(
+                            "SELECT round, stage, avg(value) as loss FROM losses GROUP BY round, stage ORDER BY round").df()
+                        avg_losses["round"] = avg_losses["round"].astype(int)
+                        fig = px.line(avg_losses, x="round", y="loss", color="stage")
+                        fig.write_image(outdir / f"{prefix_algorithm}_avg_losses.png")
 
-                avg_losses = conn.sql("SELECT round, stage, avg(value) as loss FROM losses GROUP BY round, stage").df()
-                fig = px.line(avg_losses, x="round", y="loss", color="stage")
-                fig.write_image(outdir / f"{prefix_algorithm}_avg_losses.png")
+                        f1_scores = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'f1'").df()
+                        f1_scores["round"] = f1_scores["round"].astype(int)
+                        fig = px.box(f1_scores, x="round", y="value")
+                        fig.write_image(outdir / f"{prefix_algorithm}_f1scores.png")
 
-                f1_scores = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'f1'").df()
-                fig = px.box(f1_scores, x="round", y="value", color="stage")
-                fig.write_image(outdir / f"{prefix_algorithm}_f1scores.png")
+                        avg_f1_scores = conn.sql("SELECT round, stage, avg(value) as f1 FROM f1_scores GROUP BY round, stage ORDER BY round").df()
+                        fig = px.line(avg_f1_scores, x="round", y="f1")
+                        fig.write_image(outdir / f"{prefix_algorithm}_avg_f1scores.png")
+                else:
+                    logs_algorithm = conn.sql("SELECT * FROM logs \
+                        WHERE logs.dataset = dataset AND logs.imbalance_type = imbalance_type AND logs.algorithm = algorithm ORDER BY round")
+                    prefix_algorithm = f"{run_id}_{dataset}_{imbalance_type}_{algorithm}"
 
-                avg_losses = conn.sql("SELECT round, stage, avg(value) as f1 FROM f1_scores GROUP BY round, stage").df()
-                fig = px.line(avg_losses, x="round", y="f1", color="stage")
-                fig.write_image(outdir / f"{prefix_algorithm}_avg_f1scores.png")
+                    losses = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'loss' ORDER BY round").df()
 
+                    avg_losses = conn.sql(
+                        "SELECT round, stage, avg(value) as loss FROM losses GROUP BY round, stage ORDER BY round").df()
+                    avg_losses["round"] = avg_losses["round"].astype(int)
+                    fig = px.line(avg_losses, x="round", y="loss", color="stage")
+                    fig.write_image(outdir / f"{prefix_algorithm}_avg_losses.png")
+
+                    f1_scores = conn.sql("SELECT * FROM logs_algorithm WHERE variable = 'f1' ORDER BY round").df()
+                    f1_scores["round"] = f1_scores["round"].astype(int)
+                    fig = px.box(f1_scores, x="round", y="value")
+                    fig.write_image(outdir / f"{prefix_algorithm}_f1scores.png")
+
+                    avg_f1_scores = conn.sql(
+                        "SELECT round, stage, avg(value) as f1 FROM f1_scores GROUP BY round, stage ORDER BY round").df()
+                    avg_f1_scores["round"] = avg_f1_scores["round"].astype(int)
+                    fig = px.line(avg_f1_scores, x="round", y="f1")
+                    fig.write_image(outdir / f"{prefix_algorithm}_avg_f1scores.png")
 
                 for imbalance_value in imbalance_values:
                     logs_imbalance = conn.sql(
@@ -109,6 +126,19 @@ def main():
                     fig.write_image(outdir / (prefix_imbalance + "_quantity_imbalance_hist.png"))
 
     conn.close()
+
+
+def read_data(dbfile):
+    conn = duckdb.connect(str(dbfile))
+    logs = conn.sql(SQL_ALL)
+    algorithms = single_col_to_list(conn.sql("SELECT DISTINCT algorithm FROM logs").fetchall())
+    datasets = single_col_to_list(conn.sql("SELECT DISTINCT dataset FROM logs").fetchall())
+    variables = single_col_to_list(conn.sql("SELECT DISTINCT variable FROM logs").fetchall())
+    imbalance_types = single_col_to_list(conn.sql("SELECT DISTINCT imbalance_type FROM logs").fetchall())
+    imbalance_values = single_col_to_list(conn.sql("SELECT DISTINCT imbalance_value FROM logs").fetchall())
+    penalties = single_col_to_list(conn.sql("SELECT DISTINCT penalty FROM logs").fetchall())
+    # sub_ids = single_col_to_list(conn.sql("SELECT DISTINCT sub_id FROM logs").fetchall())
+    return conn, logs, algorithms, datasets, imbalance_types, imbalance_values, penalties
 
 
 if __name__ == "__main__":

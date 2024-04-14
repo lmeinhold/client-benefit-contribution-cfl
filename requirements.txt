@@ -11,5 +11,6 @@ jsonpickle
 scipy
 duckdb
 plotly
+kaleido
 inquirer
 ucimlrepo
