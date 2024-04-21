@@ -1,5 +1,10 @@
+from typing import List, Sequence, Callable
+
 import numpy as np
 import torch
+import torchvision.transforms.functional as TF
+from torch.utils.data import Subset
+from torch.utils.data.dataset import T_co, Dataset
 
 
 def get_device() -> str:
@@ -37,3 +42,28 @@ def collect_state_dicts(state_dicts: list[StateDict]) -> dict[str, list[torch.Te
             else:
                 aggregated_state_dict[k] = [state_dict[k]]
     return aggregated_state_dict
+
+
+class FixedRotationTransform:
+    """Apply a fixed angle rotation to all images in the dataset"""
+
+    def __init__(self, angle: int | float):
+        self.angle = angle
+
+    def __call__(self, image):
+        return TF.rotate(image, self.angle)
+
+
+class TransformingSubset(Subset):
+    """A subset that applies a transform to each item in the subset"""
+    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transform: Callable):
+        super().__init__(dataset, indices)
+        self.transform = transform
+
+    def __getitem__(self, idx) -> T_co:
+        item = super().__getitem__(idx)
+        return self.transform(item[0]), item[1]
+
+    def __getitems__(self, indices: List[int]) -> List[T_co]:
+        items = super().__getitems__(indices)
+        return [(self.transform(it[0]), it[1]) for it in items]

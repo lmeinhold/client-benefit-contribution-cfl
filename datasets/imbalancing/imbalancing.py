@@ -1,8 +1,10 @@
-from pprint import pprint
-
 import numpy as np
 import torch
+import torchvision.transforms.functional
 from torch.utils.data import Dataset, random_split, Subset, TensorDataset
+from torchvision.transforms import transforms
+
+from utils.torchutils import FixedRotationTransform, TransformingSubset
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
@@ -27,8 +29,8 @@ def split_dataset_equally(dataset: Dataset, n: int, seed: int, *args, **kwargs):
 
 
 def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> \
-list[
-    Dataset]:
+        list[
+            Dataset]:
     """Split a dataset into n datasets with varying size following a dirichlet distribution"""
     n = len(dataset)
 
@@ -49,7 +51,7 @@ list[
 
 
 def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, seed: int = None, *args, **kwargs) -> \
-list[Dataset]:
+        list[Dataset]:
     """Split a dataset into n subsets with exactly c different labels per client"""
     _, labels = extract_raw_data(dataset)
     n = len(labels)
@@ -97,6 +99,46 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
     apply_minimum_num_of_samples(batch_indices, n_clients)
 
     return [Subset(dataset, indices) for indices in batch_indices]
+
+
+def split_with_transform_imbalance(dataset: Dataset, n_clients: int, transform_fn, n_transforms: int, alpha: float = 1,
+                                   seed: int = None, *args, **kwargs) -> list[Dataset]:
+    """Split a dataset into n parts of equal length, applying a transformation function to each client,
+    createing a feature imbalance distribution dependend on alpha"""
+    if seed is not None:
+        np.random.seed(seed)
+
+    group_proportions = np.random.dirichlet(np.repeat(alpha, n_transforms))
+    client_group_assignments = np.random.choice(a=np.arange(n_transforms), size=n_clients, p=group_proportions)
+
+    split_datasets = split_dataset_equally(dataset=dataset, n=n_clients, seed=seed)
+
+    return [TransformingSubset(ds.dataset, ds.indices, transform_fn(group_idx)) for group_idx, ds in
+            zip(client_group_assignments, split_datasets)]
+
+
+def split_with_rotation(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> list[
+    Dataset]:
+    """Split an image dataset applying rotation according to a dirichlet distribution"""
+    rotations = [0, 90, 180, 270]
+
+    def transform_rotate(idx):
+        degrees = rotations[idx]
+        if degrees != 0:  # don't apply an unnecessary 0° rotation
+            return lambda x: x
+        else:
+            return FixedRotationTransform(degrees)
+
+    return split_with_transform_imbalance(
+        dataset=dataset,
+        n_clients=n_clients,
+        alpha=alpha,
+        seed=seed,
+        n_transforms=len(rotations),
+        transform_fn=transform_rotate,
+        *args,
+        **kwargs
+    )
 
 
 def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 5):

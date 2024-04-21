@@ -57,8 +57,7 @@ from datasets.base import create_dataloader
 from datasets.cifar import CIFAR10
 from datasets.diabetes import Diabetes
 from datasets.emnist import EMNIST
-from datasets.imbalancing.imbalancing import split_dataset_equally, split_with_quantity_skew, \
-    split_with_label_distribution_skew, train_test_split
+from datasets.imbalancing.imbalancing import *
 from datasets.imbalancing.stats import li_ldi_qi
 from datasets.mnist import MNIST
 from federated_learning.fedprox import FedProx
@@ -71,8 +70,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("train.py")
 
 ALL_ALGORITHMS = ["FedAvg", "FedProx", "IFCA", "FLSC", "Local"]
-ALL_DATASETS = ["mnist", "cifar10"]
-ALL_DATA_IMBALANCES = ["iid", "quantity_distribution", "label_distribution"]
 
 DATASETS = {
     "mnist": MNIST,
@@ -92,7 +89,11 @@ IMBALANCES = {
     "iid": split_dataset_equally,
     "quantity_distribution": split_with_quantity_skew,
     "label_distribution": split_with_label_distribution_skew,
+    "feature_distribution_rotation": split_with_rotation,
 }
+
+ALL_DATASETS = DATASETS.keys()
+ALL_DATA_IMBALANCES = IMBALANCES.keys()
 
 LOSS_FN_MULTI = CrossEntropyLoss
 LOSS_FN_BINARY = BCELoss
@@ -101,7 +102,7 @@ BATCH_SIZE = 64
 TEST_SIZE = 0.2
 
 OUTPUT_DIR = "./output/"
-DATA_DIR = "./data"
+DATA_DIR = "/var/tmp/data"
 
 
 def create_optimizer(params):
