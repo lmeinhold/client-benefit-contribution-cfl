@@ -89,7 +89,8 @@ IMBALANCES = {
     "iid": split_dataset_equally,
     "quantity_distribution": split_with_quantity_skew,
     "label_distribution": split_with_label_distribution_skew,
-    "feature_distribution_rotation": split_with_rotation,
+    "feature_distribution_single_rotation": split_with_rotation,
+    "feature_distribution": split_with_feature_distribution_skew,
 }
 
 ALL_DATASETS = DATASETS.keys()

@@ -1,3 +1,4 @@
+from functools import cache
 from typing import List, Sequence, Callable
 
 import numpy as np
@@ -67,3 +68,24 @@ class TransformingSubset(Subset):
     def __getitems__(self, indices: List[int]) -> List[T_co]:
         items = super().__getitems__(indices)
         return [(self.transform(it[0]), it[1]) for it in items]
+
+
+class PerSampleTransformingSubset(Subset):
+    """A subset that applies a different transform to each item in the subset"""
+
+    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transforms: list[Callable]):
+        super().__init__(dataset, indices)
+        assert len(transforms) == len(indices), "Must provide a transform for every item in the subset"
+        self.transforms = transforms
+
+    @cache
+    def transform_sample(self, index, item):
+        return self.transforms[index](item)
+
+    def __getitem__(self, idx) -> T_co:
+        item = super().__getitem__(idx)
+        return self.transform_sample(idx, item[0]), item[1]
+
+    def __getitems__(self, indices: List[int]) -> List[T_co]:
+        items = super().__getitems__(indices)
+        return [(self.transform_sample(idx, it[0]), it[1]) for idx, it in zip(indices, items)]

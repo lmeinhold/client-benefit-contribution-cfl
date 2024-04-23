@@ -4,7 +4,7 @@ import torchvision.transforms.functional
 from torch.utils.data import Dataset, random_split, Subset, TensorDataset
 from torchvision.transforms import transforms
 
-from utils.torchutils import FixedRotationTransform, TransformingSubset
+from utils.torchutils import FixedRotationTransform, TransformingSubset, PerSampleTransformingSubset
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
@@ -99,6 +99,36 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
     apply_minimum_num_of_samples(batch_indices, n_clients)
 
     return [Subset(dataset, indices) for indices in batch_indices]
+
+
+def split_with_feature_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,
+                                         **kwargs):
+    features, labels = extract_raw_data(dataset)
+
+    n = len(dataset)
+    angles = [0, 90, 180, 270]
+    transforms = list(map(FixedRotationTransform, angles))
+    n_features = len(angles)
+
+    indices = np.random.permutation(n)
+
+    if seed is not None:
+        np.random.seed(seed)
+    proportions = np.random.dirichlet(np.repeat(alpha, n_clients))
+    proportions /= proportions.sum()
+    proportions = (np.cumsum(proportions) * n).astype(int)[:-1]
+
+    batch_indices = np.split(indices, proportions)
+    batch_indices = list(map(np.ndarray.tolist, batch_indices))
+
+    apply_minimum_num_of_samples(batch_indices, n_clients)
+
+    group_proportions = np.random.dirichlet(np.repeat(alpha, n_features))
+    batch_group_assignments = [np.random.choice(a=np.arange(n_features), size=len(batch), p=group_proportions) for batch
+                               in batch_indices]
+
+    return [PerSampleTransformingSubset(dataset, idxs, [transforms[g] for g in groups]) for idxs, groups in
+            zip(batch_indices, batch_group_assignments)]
 
 
 def split_with_transform_imbalance(dataset: Dataset, n_clients: int, transform_fn, n_transforms: int, alpha: float = 1,
