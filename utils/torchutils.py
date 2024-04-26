@@ -1,3 +1,4 @@
+import abc
 from functools import cache
 from typing import List, Sequence, Callable
 
@@ -55,11 +56,27 @@ class FixedRotationTransform:
         return TF.rotate(image, self.angle)
 
 
-class TransformingSubset(Subset):
+class TransformingSubset(Subset, metaclass=abc.ABCMeta):
+    """Abstract base class for subsets that apply a transformation."""
+
+    @abc.abstractmethod
+    @property
+    def features(self) -> np.ndarray:
+        """Return a numpy array that represents the transformations for each subset index"""
+        raise NotImplementedError()
+
+
+class SingleTransformingSubset(TransformingSubset):
     """A subset that applies a transform to each item in the subset"""
-    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transform: Callable):
+
+    @property
+    def features(self) -> np.ndarray:
+        return np.full_like(self.indices, self.transform_id)
+
+    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transform: Callable, transform_id):
         super().__init__(dataset, indices)
         self.transform = transform
+        self.transform_id = transform_id
 
     def __getitem__(self, idx) -> T_co:
         item = super().__getitem__(idx)
@@ -70,13 +87,19 @@ class TransformingSubset(Subset):
         return [(self.transform(it[0]), it[1]) for it in items]
 
 
-class PerSampleTransformingSubset(Subset):
+class PerSampleTransformingSubset(TransformingSubset):
     """A subset that applies a different transform to each item in the subset"""
 
-    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transforms: list[Callable]):
+    @property
+    def features(self) -> np.ndarray:
+        return self.transform_ids
+
+    def __init__(self, dataset: Dataset[T_co], indices: Sequence[int], transforms: list[Callable],
+                 transform_ids: np.ndarray):
         super().__init__(dataset, indices)
         assert len(transforms) == len(indices), "Must provide a transform for every item in the subset"
         self.transforms = transforms
+        self.transform_ids = transform_ids
 
     @cache
     def transform_sample(self, index, item):

@@ -58,7 +58,7 @@ from datasets.cifar import CIFAR10
 from datasets.diabetes import Diabetes
 from datasets.emnist import EMNIST
 from datasets.imbalancing.imbalancing import *
-from datasets.imbalancing.stats import li_ldi_qi
+from datasets.imbalancing.stats import li_ldi_qi, fi_fdi
 from datasets.mnist import MNIST
 from federated_learning.fedprox import FedProx
 from federated_learning.flsc import FLSC
@@ -441,6 +441,10 @@ def get_tables(conn: duckdb.DuckDBPyConnection) -> list[str]:
 def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance_type: str,
                    imbalance_value: int | float, datasets):
     li, ldi, qi = li_ldi_qi(datasets)
+    fi = np.nan
+    fdi = np.nan
+    if "feature" in imbalance_type:
+        fi, fdi = fi_fdi(datasets)
 
     df = pd.DataFrame({
         "dataset": dataset_name,
@@ -450,6 +454,8 @@ def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance
         "label_imbalance": li,
         "label_distribution_imbalance": ldi,
         "quantity_imbalance": qi,
+        "feature_imbalance": fi,
+        "feature_distribution_imbalance": fdi,
     })
 
     if "data_distributions" in get_tables(conn):

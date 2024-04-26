@@ -1,10 +1,8 @@
 import numpy as np
 import torch
-import torchvision.transforms.functional
 from torch.utils.data import Dataset, random_split, Subset, TensorDataset
-from torchvision.transforms import transforms
 
-from utils.torchutils import FixedRotationTransform, TransformingSubset, PerSampleTransformingSubset
+from utils.torchutils import FixedRotationTransform, SingleTransformingSubset, PerSampleTransformingSubset
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
@@ -127,7 +125,7 @@ def split_with_feature_distribution_skew(dataset: Dataset, n_clients: int, alpha
     batch_group_assignments = [np.random.choice(a=np.arange(n_features), size=len(batch), p=group_proportions) for batch
                                in batch_indices]
 
-    return [PerSampleTransformingSubset(dataset, idxs, [transforms[g] for g in groups]) for idxs, groups in
+    return [PerSampleTransformingSubset(dataset, idxs, [transforms[g] for g in groups], groups) for idxs, groups in
             zip(batch_indices, batch_group_assignments)]
 
 
@@ -143,7 +141,7 @@ def split_with_transform_imbalance(dataset: Dataset, n_clients: int, transform_f
 
     split_datasets = split_dataset_equally(dataset=dataset, n=n_clients, seed=seed)
 
-    return [TransformingSubset(ds.dataset, ds.indices, transform_fn(group_idx)) for group_idx, ds in
+    return [SingleTransformingSubset(ds.dataset, ds.indices, transform_fn(group_idx), group_idx) for group_idx, ds in
             zip(client_group_assignments, split_datasets)]
 
 
@@ -154,10 +152,7 @@ def split_with_rotation(dataset: Dataset, n_clients: int, alpha: float = 1, seed
 
     def transform_rotate(idx):
         degrees = rotations[idx]
-        if degrees != 0:  # don't apply an unnecessary 0° rotation
-            return lambda x: x
-        else:
-            return FixedRotationTransform(degrees)
+        return FixedRotationTransform(degrees)
 
     return split_with_transform_imbalance(
         dataset=dataset,
