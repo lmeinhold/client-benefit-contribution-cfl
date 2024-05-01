@@ -28,6 +28,7 @@ Options:
 
     --list-algorithms                               List all implemented algorithms.
     --list-datasets                                 List all implemented datasets.
+    --list-imbalances                               List all implemented balances
 
     --version                                       Show version
     -h --help                                       Show this screen
@@ -311,6 +312,10 @@ def main():
 
     if arguments["--list-datasets"]:
         print("\n".join(ALL_DATASETS))
+        sys.exit(0)
+
+    if arguments["--list-imbalances"]:
+        print("\n".join(sorted(IMBALANCES.keys())))
         sys.exit(0)
 
     logger.debug(f"GPU available: {torch.cuda.is_available()}")
