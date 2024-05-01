@@ -409,6 +409,8 @@ def main():
                 )""")
                 conn.append("configurations", config_df, by_name=True)
 
+                conn.execute("CHECKPOINT")
+
         sub_id_n += 1
 
     conn.close()
