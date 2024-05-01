@@ -59,8 +59,8 @@ class FixedRotationTransform:
 class TransformingSubset(Subset, metaclass=abc.ABCMeta):
     """Abstract base class for subsets that apply a transformation."""
 
-    @abc.abstractmethod
     @property
+    @abc.abstractmethod
     def features(self) -> np.ndarray:
         """Return a numpy array that represents the transformations for each subset index"""
         raise NotImplementedError()

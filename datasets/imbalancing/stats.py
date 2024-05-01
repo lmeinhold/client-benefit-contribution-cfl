@@ -1,4 +1,5 @@
 """Different metrics for measuring data imbalance for each client"""
+from typing import Any, Sequence
 
 import numpy as np
 from scipy.spatial import distance
@@ -7,14 +8,39 @@ from torch.utils.data import Dataset
 from utils.torchutils import TransformingSubset
 
 
-def _phi_j(dataset: TransformingSubset) -> np.ndarray:
-    return dataset.features.sum(axis=0)
+class UniqueElementCounter:
+    def __init__(self):
+        self.elements = set()
+
+    def add(self, elem: Any) -> "UniqueElementCounter":
+        self.elements.add(elem)
+        return self
+
+    def add_all(self, elems: Sequence[Any]) -> "UniqueElementCounter":
+        for elem in elems:
+            self.elements.add(elem)
+        return self
+
+    @property
+    def count(self) -> int:
+        return len(self.elements)
+
+
+def _phi_j(dataset: TransformingSubset, n_features: int) -> np.ndarray:
+    counts = dict(zip(*np.unique(dataset.features, return_counts=True)))
+    return np.asarray([counts[f] if f in counts else 0 for f in range(n_features)])
 
 
 def secure_aggregation_features(datasets: list[TransformingSubset]) -> tuple[np.ndarray, np.ndarray]:
     """Computer secure aggregation feature vectors"""
-    phi_js = np.asarray(list(map(_phi_j, datasets)))
+    feature_ids = UniqueElementCounter()
+    for ds in datasets:
+        feature_ids.add_all(ds.features)
+    n_features = feature_ids.count
+
+    phi_js = np.asarray(list(map(lambda d: _phi_j(d, n_features), datasets)))
     Phi = phi_js.sum(axis=0)
+
     return phi_js, Phi
 
 
@@ -51,6 +77,9 @@ def secure_aggregation(datasets: list[Dataset]) -> tuple[np.ndarray, np.ndarray]
     """Compute the secure aggregation vectors v_j and V"""
     vjs = np.asarray(list(map(_v_j, datasets)))
     V = vjs.sum(axis=0)
+    n = len(vjs[0])
+    for vj in vjs:
+        assert len(vj) == n
     return vjs, V
 
 
