@@ -6,7 +6,7 @@ torchvision
 matplotlib
 seaborn
 tqdm
-docopt
+docopt-ng
 scipy
 duckdb
 plotly

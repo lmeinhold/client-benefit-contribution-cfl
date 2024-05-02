@@ -3,7 +3,7 @@
 
 Usage:
     train.py [--datasets=<datasets> --imbalance-types=<imbalance-types> --imbalances=<imbalances> --algorithms=<algorithms> --rounds=<rounds> --epochs=<epochs> --penalty=<penalty> --n-clients=<n-clients> --clients-per-round=<clients-per-round> --clusters=<clusters> --clusters-per-client=<clusters-per-client> --resume=<run_id> --seed=<seed> --cpu --dry-run --verbose]
-    train.py (--list-algorithms | --list-datasets)
+    train.py (--list-algorithms | --list-datasets | --list-imbalances)
     train.py (-h | --help)
     train.py --version
 
