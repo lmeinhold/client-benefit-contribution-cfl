@@ -7,10 +7,8 @@ matplotlib
 seaborn
 tqdm
 docopt
-jsonpickle
 scipy
 duckdb
 plotly
 kaleido
-inquirer
 ucimlrepo
