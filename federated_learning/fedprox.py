@@ -134,7 +134,7 @@ class FedProx(FederatedLearningAlgorithm):
 
         return epoch_loss / len(client_train_data)
 
-    @torch.compile(mode="reduce-overhead")
+    # @torch.compile(mode="reduce-overhead")
     def _proximal_term(self, old_state, new_state):
         """Calculate the proximal loss term, i.e. the L2 norm of the difference between current and global weights"""
         proximal_loss = 0
