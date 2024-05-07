@@ -448,10 +448,15 @@ def get_tables(conn: duckdb.DuckDBPyConnection) -> list[str]:
 def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance_type: str,
                    imbalance_value: int | float, datasets):
     li, ldi, qi = li_ldi_qi(datasets)
+    labels = [ds.targets for ds in datasets]
+    sizes = [len(ds) for ds in datasets]
+
     fi = np.nan
     fdi = np.nan
+    features = None
     if "feature" in imbalance_type:
         fi, fdi = fi_fdi(datasets)
+        features = [ds.features for ds in datasets]
 
     df = pd.DataFrame({
         "dataset": dataset_name,
@@ -463,6 +468,9 @@ def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance
         "quantity_imbalance": qi,
         "feature_imbalance": fi,
         "feature_distribution_imbalance": fdi,
+        "client_labels": labels,
+        "client_features": features,
+        "client_size": sizes,
     })
 
     if "data_distributions" in get_tables(conn):
