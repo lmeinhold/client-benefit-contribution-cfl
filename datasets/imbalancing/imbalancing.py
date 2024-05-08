@@ -2,7 +2,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, random_split, Subset, TensorDataset
 
-from utils.torchutils import FixedRotationTransform, SingleTransformingSubset, PerSampleTransformingSubset
+from utils.torchutils import FixedRotationTransform, SingleTransformingSubset, PerSampleTransformingSubset, CustomSubset
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
@@ -45,7 +45,7 @@ def split_with_quantity_skew(dataset: Dataset, n_clients: int, alpha: float = 1,
 
     apply_minimum_num_of_samples(batch_indices, n_clients)
 
-    return [Subset(dataset, batch_indices[i]) for i, idx in enumerate(batch_indices)]
+    return [CustomSubset(dataset, batch_indices[i]) for i, idx in enumerate(batch_indices)]
 
 
 def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, seed: int = None, *args, **kwargs) -> \
@@ -69,7 +69,7 @@ def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, se
         for client_idx, split_idx in zip(clients_for_class, split_idxs):
             batch_indices[client_idx] += split_idx.tolist()
 
-    return [Subset(dataset, indices) for indices in batch_indices]
+    return [CustomSubset(dataset, indices) for indices in batch_indices]
 
 
 def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,
@@ -96,7 +96,7 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
 
     apply_minimum_num_of_samples(batch_indices, n_clients)
 
-    return [Subset(dataset, indices) for indices in batch_indices]
+    return [CustomSubset(dataset, indices) for indices in batch_indices]
 
 
 def split_with_feature_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,

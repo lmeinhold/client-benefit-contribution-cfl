@@ -56,7 +56,15 @@ class FixedRotationTransform:
         return TF.rotate(image, self.angle)
 
 
-class TransformingSubset(Subset, metaclass=abc.ABCMeta):
+class CustomSubset(Subset):
+    """Subset subclass with additional functionality"""
+
+    @property
+    def targets(self):
+        return [self.dataset.targets[i] for i in self.indices]
+
+
+class TransformingSubset(CustomSubset, metaclass=abc.ABCMeta):
     """Abstract base class for subsets that apply a transformation."""
 
     @property
@@ -86,10 +94,6 @@ class SingleTransformingSubset(TransformingSubset):
         items = super().__getitems__(indices)
         return [(self.transform(it[0]), it[1]) for it in items]
 
-    @property
-    def targets(self):
-        return [self.dataset.targets[i] for i in self.indices]
-
 
 class PerSampleTransformingSubset(TransformingSubset):
     """A subset that applies a different transform to each item in the subset"""
@@ -116,7 +120,3 @@ class PerSampleTransformingSubset(TransformingSubset):
     def __getitems__(self, indices: List[int]) -> List[T_co]:
         items = super().__getitems__(indices)
         return [(self.transform_sample(idx, it[0]), it[1]) for idx, it in zip(indices, items)]
-
-    @property
-    def targets(self):
-        return [self.dataset.targets[i] for i in self.indices]

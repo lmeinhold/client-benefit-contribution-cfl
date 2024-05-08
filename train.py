@@ -480,7 +480,7 @@ def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance
             d.dataset = ?
             AND d.imbalance_type = ?
             AND d.imbalance_value = ?"""
-        combination_exists = conn.execute(sql_exists, [dataset_name, imbalance_type, imbalance_value]) \
+        combination_exists = conn.sql(sql_exists, params=[dataset_name, imbalance_type, imbalance_value]) \
             .fetchone()[0]
         if combination_exists:
             logger.debug(
