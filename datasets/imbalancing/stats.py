@@ -3,6 +3,7 @@ from typing import Any, Sequence
 
 import numpy as np
 from scipy.spatial import distance
+from sklearn.cluster import KMeans
 from torch.utils.data import Dataset
 
 from utils.torchutils import TransformingSubset
@@ -135,3 +136,11 @@ def fi_fdi(datasets: list[TransformingSubset]) -> tuple[np.ndarray, np.ndarray]:
     fdi = feature_distribution_imbalances(phi_js, Phi)
 
     return fi, fdi
+
+
+def get_clusters_for_lxo(n_clusters, *args):
+    """Compute cluster identities for client contribution LXO via KMeans clustering"""
+    client_vectors = np.asarray(args).transpose()  # create feature vectors with clients row-wise
+    kmeans = KMeans(n_clusters=n_clusters)
+    kmeans.fit(client_vectors)
+    return kmeans.labels_

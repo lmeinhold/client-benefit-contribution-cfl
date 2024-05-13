@@ -25,7 +25,6 @@ class FedProx(FederatedLearningAlgorithm):
             raise Exception(f"Test data must be either of length 1 or the same length as the training data")
 
         eff_clients_per_round = self.effective_clients_per_round(n_clients)
-        print(f"Clients per round: {eff_clients_per_round}")
 
         model = self.model_class()
         if torch_compile:
