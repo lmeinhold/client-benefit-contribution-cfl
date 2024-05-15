@@ -359,10 +359,10 @@ def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, se
     cluster_labels = None
     if lxo is not None:
         n_clusters = len(train_datasets) // lxo
-        if not isinstance(fi, list) and not isinstance(fi, np.ndarray) and fi == np.nan:
-            cluster_labels = get_clusters_for_lxo(n_clusters, qi, li, ldi)
-        else:
+        if "feature" in imbalance:
             cluster_labels = get_clusters_for_lxo(n_clusters, qi, li, ldi, fi, fdi)
+        else:
+            cluster_labels = get_clusters_for_lxo(n_clusters, qi, li, ldi)
 
     return datasets_to_dataloaders(train_datasets), datasets_to_dataloaders(test_datasets), cluster_labels
 
