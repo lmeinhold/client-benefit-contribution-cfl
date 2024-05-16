@@ -67,9 +67,6 @@ def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duc
                                                     AND round = rounds - 1 -- last round
                                                 GROUP BY algorithm, imbalance_type, imbalance_value, round, n_clients""").pl()
 
-    title_format = "{col_name})"
-    imbalance_order = sorted(final_f1_data["alpha"].unique())
-
     y = "weighted_f1score" if weighted else "f1score"
 
     ax = sns.pointplot(final_f1_data, x="alpha", y=y, hue="algorithm")
