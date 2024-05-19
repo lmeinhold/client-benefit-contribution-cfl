@@ -45,7 +45,6 @@ from datetime import datetime
 from pathlib import Path
 
 import duckdb
-import numpy as np
 import pandas as pd
 from docopt import docopt
 from torch.nn import CrossEntropyLoss, BCELoss
@@ -336,6 +335,15 @@ def run_client_contribution(config: RunConfig, device, client_labels: np.ndarray
         metrics_df, infos_df = results.as_dataframes()
         metrics.append(metrics_df)
         infos.append(infos_df)
+
+    logger.info(f"Training with all clients")
+    left_out_clients.append(np.empty(dtype=int))
+
+    results = run(config, train_data, test_data, device=device)
+
+    metrics_df, infos_df = results.as_dataframes()
+    metrics.append(metrics_df)
+    infos.append(infos_df)
 
     return left_out_clients, metrics, infos
 
