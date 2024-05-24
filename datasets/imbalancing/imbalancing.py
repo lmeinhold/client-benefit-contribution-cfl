@@ -62,6 +62,8 @@ def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, se
     batch_indices = [[] for _ in range(n_clients)]
     for class_idx in np.arange(n_classes):
         clients_for_class = np.asarray([i for i in range(n_clients) if classes[class_idx] in chosen_classes[i]])
+        if len(clients_for_class) == 0:
+            continue
         class_idxs_in_dataset = np.asarray([i for i, l in enumerate(labels) if l == classes[class_idx]])
         np.random.shuffle(class_idxs_in_dataset)
         max_len = len(class_idxs_in_dataset) - (len(class_idxs_in_dataset) % len(clients_for_class))
