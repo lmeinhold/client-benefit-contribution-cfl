@@ -8,7 +8,10 @@ from datasets.base import Dataset
 
 
 class EMNIST(Dataset):
-    """Extended MNIST Dataset"""
+    """
+    A wrapper for the extended MNIST Dataset.
+    https://www.nist.gov/itl/products-and-services/emnist-dataset
+    """
     SPLIT = "balanced"
     N_CLASSES = 47
 

@@ -109,10 +109,12 @@ DATA_DIR = "/var/tmp/data"
 
 
 def create_optimizer(params):
+    """Function to pass to FL implementations. Returns an Adam optimizer with the given parameters."""
     return Adam(params, LR)
 
 
 def parse_list_arg(arg: str) -> list[str]:
+    """Parse a single string argument into a list of strings"""
     if arg == "":
         raise Exception("Empty argument!")
 
@@ -123,15 +125,18 @@ def parse_list_arg(arg: str) -> list[str]:
 
 
 def to_int_list(strings: list[str]) -> list[int]:
+    """Turn a str list into an int list"""
     return list(map(int, strings))
 
 
 def to_float_list(strings: list[str]) -> list[float]:
+    """Turn a str list into a float list"""
     return list(map(float, strings))
 
 
 @dataclass(eq=True, frozen=True)
 class RunConfig:
+    """Common run config for all FL algorithms"""
     ttype: str
     algorithm: str
     dataset: str
@@ -145,26 +150,29 @@ class RunConfig:
 
 @dataclass(eq=True, frozen=True)
 class FedProxConfig(RunConfig):
+    """Run config for FedProx/FedAvg, including the penalty mu"""
     penalty: float
 
 
 @dataclass(eq=True, frozen=True)
 class FlscConfig(RunConfig):
+    """Run config for FLSC/IFCA, including N and C"""
     clusters: int
     clusters_per_client: int
 
 
 def new_run_id() -> str:
+    """Create a new unique run id from the current time, e.g. 20240501_101010 for 2024-05-01, 10:10:10"""
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 def create_config(ttype: str, algorithm: str, dataset: str, rounds: int, epochs: int, n_clients: int,
                   clients_per_round: float, penalty: float, clusters: int, clusters_per_client: int, imbalance_type,
                   imbalance_value: float) -> RunConfig:
-    """Create a run config. Checks parameters for correct algorithm name"""
-    actual_imbalance_value = imbalance_value if imbalance_type != "iid" else 1
+    """Create a run config. Checks parameters for correct algorithm name."""
+    actual_imbalance_value = imbalance_value if imbalance_type != "iid" else 1  # Imbalance value not required for iid
 
-    if algorithm == "fedavg" or algorithm == "fedprox" and penalty == 0:
+    if algorithm == "fedavg" or algorithm == "fedprox" and penalty == 0:  # If mu=0, algorithm is always FedAvg
         return FedProxConfig(
             ttype=ttype,
             algorithm="FedAvg",
@@ -190,7 +198,7 @@ def create_config(ttype: str, algorithm: str, dataset: str, rounds: int, epochs:
             imbalance_type=imbalance_type,
             imbalance_value=actual_imbalance_value,
         )
-    elif algorithm == "ifca" or algorithm == "flsc" and clusters_per_client == 1:
+    elif algorithm == "ifca" or algorithm == "flsc" and clusters_per_client == 1:  # If C=1, algorithm is always IFCA
         return FlscConfig(
             ttype=ttype,
             algorithm="IFCA",
@@ -218,14 +226,14 @@ def create_config(ttype: str, algorithm: str, dataset: str, rounds: int, epochs:
             imbalance_type=imbalance_type,
             imbalance_value=actual_imbalance_value,
         )
-    elif algorithm == "local" or algorithm == "global":
+    elif algorithm == "local":
         return RunConfig(
             ttype=ttype,
             algorithm=algorithm,
             dataset=dataset,
             rounds=rounds,
             epochs=epochs,
-            n_clients=n_clients if algorithm == "local" else 1,
+            n_clients=n_clients,
             clients_per_round=1,
             imbalance_type=imbalance_type,
             imbalance_value=actual_imbalance_value,
@@ -235,6 +243,7 @@ def create_config(ttype: str, algorithm: str, dataset: str, rounds: int, epochs:
 
 
 def get_loss(run_config: RunConfig):
+    """Get the appropriate loss function for the dataset."""
     if run_config.dataset.lower() == "diabetes":
         return LOSS_FN_BINARY()
     return LOSS_FN_MULTI()
@@ -337,7 +346,7 @@ def run_client_contribution(config: RunConfig, device, client_labels: np.ndarray
         infos.append(infos_df)
 
     logger.info(f"Training with all clients")
-    left_out_clients.append(np.empty(dtype=int))
+    left_out_clients.append(np.array([]))
 
     results = run(config, train_data, test_data, device=device)
 
@@ -349,6 +358,7 @@ def run_client_contribution(config: RunConfig, device, client_labels: np.ndarray
 
 
 def datasets_to_dataloaders(datasets, batch_size=BATCH_SIZE) -> list[DataLoader]:
+    """Turn a list of datasets into a list of DataLoaders with given batch size"""
     return [create_dataloader(d, batch_size) for d in datasets]
 
 
@@ -367,7 +377,7 @@ def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, se
     cluster_labels = None
     if lxo is not None:
         n_clusters = len(train_datasets) // lxo
-        if "feature" in imbalance:
+        if "feature" in imbalance:  # log feature (distribution) imbalance only if feature imbalance is applied
             cluster_labels = get_clusters_for_lxo(n_clusters, qi, li, ldi, fi, fdi)
         else:
             cluster_labels = get_clusters_for_lxo(n_clusters, qi, li, ldi)
@@ -376,11 +386,22 @@ def generate_datasets(dataset, n=1, imbalance: str = "iid", alpha: float = 1, se
 
 
 def get_tables(conn: duckdb.DuckDBPyConnection) -> list[str]:
+    """Get all list of all tables from a duckdb database"""
     return [r[0] for r in conn.sql("SHOW TABLES").fetchall()]
 
 
 def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance_type: str,
                    imbalance_value: int | float, datasets):
+    """
+    Log data imbalance metrics to the given connection.
+
+        Parameters.
+            conn: a connection to a duckdb database
+            dataset_name: name of the dataset
+            imbalance_type: type of imbalance that was applied
+            imbalance_value: imbalance value alpha that was applied
+            datasets: list of client datasets
+    """
     li, ldi, qi = li_ldi_qi(datasets)
     labels = [ds.targets for ds in datasets]
     sizes = [len(ds) for ds in datasets]
@@ -431,7 +452,18 @@ def log_imbalances(conn: duckdb.DuckDBPyConnection, dataset_name: str, imbalance
 def get_data_for_config(dataset_name: str, n_clients: int, imbalance_type: str, imbalance_value: float, seed: int,
                         conn: duckdb.DuckDBPyConnection, lxo: int | None) -> tuple[
     list[DataLoader], list[DataLoader], np.ndarray]:
-    """Generate an imbalanced dataset with the specified parameters for the configuration"""
+    """
+    Generate an imbalanced dataset with the specified parameters for the configuration
+
+        Parameters:
+            dataset_name: name of the base dataset
+            n_clients: number of clients to simulate
+            imbalance_type: type of imbalance that to apply
+            imbalance_value: alpha to apply
+            seed: a seed for all random operations
+            conn: a connection to a duckdb database for logging
+            lxo: how many clients to leave out for client contribution computation
+    """
     return generate_datasets(DATASETS[dataset_name.lower()], n_clients, imbalance_type, imbalance_value, seed, conn,
                              lxo)
 
@@ -445,7 +477,8 @@ def generate_configs(ttype, algorithms, n_clients, clients_per_round, clusters, 
             for algorithm in algorithms:
                 for n_clusters in clusters:
                     for n_clusters_per_client in clusters_per_client:
-                        if n_clusters_per_client >= n_clusters:  # clusters per client must be lower than number of clusters, otherwise skip this config
+                        if n_clusters_per_client >= n_clusters:
+                            # clusters per client must be lower than number of lusters, otherwise skip this config
                             continue
                         for dataset in datasets:
                             for mu in penalty:
@@ -492,6 +525,7 @@ def main():
         print("\n".join(sorted(IMBALANCES.keys())))
         sys.exit(0)
 
+    # log device usage
     logger.debug(f"GPU available: {torch.cuda.is_available()}")
     device = "cpu" if arguments["--cpu"] else get_device()
     logger.info(f"Using device: '{device}'")
@@ -617,5 +651,6 @@ if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("Interrupted ^C")
-        sys.exit(2)
+        # handle ^C
+        print("Interrupted by user^C")
+        sys.exit(1)

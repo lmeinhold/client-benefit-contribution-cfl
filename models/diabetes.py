@@ -3,7 +3,13 @@ from torch.nn.functional import leaky_relu, sigmoid
 
 
 class MLP(nn.Module):
-    """Simple MLP model with 3 layers and dropout for the diabetes dataset"""
+    """
+    Simple MLP model with 3 layers and dropout for the diabetes dataset
+
+        Parameters:
+            dropout: fraction of neurons to randomly exclude for dropout
+    """
+
     def __init__(self, dropout=0.2):
         super().__init__()
 

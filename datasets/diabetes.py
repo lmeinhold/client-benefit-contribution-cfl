@@ -9,6 +9,11 @@ from datasets.base import Dataset
 
 
 class Diabetes(Dataset):
+    """
+    A wrapper for the diabetes dataset from the UCI ML repository.
+    https://www.archive.ics.uci.edu/dataset/891/cdc+diabetes+health+indicators
+    """
+
     def __init__(self, path: str):
         self.path = Path(path)
         features, labels = self._get_data()

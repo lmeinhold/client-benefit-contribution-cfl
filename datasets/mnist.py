@@ -8,6 +8,11 @@ from datasets.base import Dataset, CachingDataset
 
 
 class MNIST(Dataset):
+    """
+    A wrapper for the MNIST dataset.
+    http://yann.lecun.com/exdb/mnist/
+    """
+
     def __init__(self, save_dir: str):
         self.save_dir = save_dir
 

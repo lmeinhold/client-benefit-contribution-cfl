@@ -5,8 +5,19 @@ from torch import Tensor
 from utils.torchutils import tensor_weighted_mean
 
 
-def tensors_equal(a: Tensor, b: Tensor):
-    return torch.all(torch.lt(torch.abs(torch.add(a, -b)), 1e-12))
+def tensors_equal(a: Tensor, b: Tensor, eps: float = 1e-12) -> bool:
+    """
+    Check if two tensors are equal, element-wise.
+
+        Parameters:
+            a: First tensor
+            b: Second tensor
+            eps: Tolerance for float comparison
+
+        Returns:
+            true if the two tensors elements are approximately equal, otherwise false.
+    """
+    return torch.all(torch.lt(torch.abs(torch.add(a, -b)), eps)).item()
 
 
 def test_tensor_weighted_mean_equal():

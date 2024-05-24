@@ -10,11 +10,24 @@ from utils.torchutils import average_parameters, StateDict
 
 
 class FedProx(FederatedLearningAlgorithm):
-    """Federated Learning with Proximal Loss"""
+    """
+    Federated Learning with Proximal Loss. From Li et al., 2023: Federated Optimization in Heterogeneous Networks
+
+        Parameters:
+            model_class: the class of the model that is used by all clients or a function that evaluates to a model
+            loss_fn: the loss function to be used (not including special terms/penalties used by the algorithms)
+            optimizer_fn: a function that returns an optimizer given the `model.parameters()`
+            rounds: number of federated learning rounds
+            epochs: number of local model epochs per round
+            clients_per_round: a fraction of clients to use per round [default: all clients]
+            binary: whether to perform binary instead of multiclass classification [default: False]
+            mu: proximal loss parameter
+            device: device to train the model on
+    """
 
     def __init__(self, model_class, optimizer_fn, rounds: int, epochs: int, loss_fn,
                  clients_per_round: float = 1.0, mu: float = 0.0, device="cpu"):
-        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)
+        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, False, device)
         self.mu = mu
 
     def fit(self, train_data, test_data, torch_compile=False):
@@ -133,8 +146,7 @@ class FedProx(FederatedLearningAlgorithm):
 
         return epoch_loss / len(client_train_data)
 
-    # @torch.compile(mode="reduce-overhead")
-    def _proximal_term(self, old_state, new_state):
+    def _proximal_term(self, old_state, new_state) -> float:
         """Calculate the proximal loss term, i.e. the L2 norm of the difference between current and global weights"""
         proximal_loss = 0
         for w, w_t in zip(old_state, new_state):

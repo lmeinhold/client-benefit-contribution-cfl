@@ -6,12 +6,22 @@ from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
-from federated_learning.base import FederatedLearningAlgorithm
 from utils.results_writer import ResultsWriter
 
 
 class LocalModels:
-    """Train local models for each client without federation"""
+    """
+    Train local models for each client without federation
+
+        Parameters:
+            model_class: a torch Module to use as the model
+            loss: loss function to use
+            optimizer_fn: function that returns an optimizer, given model parameters
+            rounds: number of rounds to train
+            epochs: number of epochs to train (effective number of epochs is rounds * epochs)
+            device: device to train on
+    """
+
     def __init__(self, model_class, loss, optimizer_fn, rounds: int, epochs: int, device="cpu"):
         self.model_class = model_class
         self.loss = loss

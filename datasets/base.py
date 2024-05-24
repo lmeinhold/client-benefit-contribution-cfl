@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader, random_split
 
 
 class Dataset(metaclass=abc.ABCMeta):
+    """Common base class for all datasets"""
+
     @abc.abstractmethod
     def train_data(self) -> data.Dataset:
         """Return the entire train data for this dataset"""
@@ -27,17 +29,39 @@ class Dataset(metaclass=abc.ABCMeta):
         raise NotImplemented()
 
 
-def create_dataloader(data, batch_size: int):
+def create_dataloader(data: data.Dataset, batch_size: int) -> data.DataLoader:
+    """
+    Create a dataloader from the given dataset with shuffling and memory pinning
+
+        Parameters:
+            data (Dataset): the dataset to create the dataloader from
+            batch_size (int): the batch size to use for the dataloader
+
+        Returns:
+            a dataloader
+    """
     return DataLoader(data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
 
-def split_dataset(dataset, n):
-    """Split a dataset into n parts of equal length"""
+def split_dataset(dataset, n) -> list[data.Dataset]:
+    """
+    Split a dataset into n parts of equal length randomly
+
+        Parameters:
+            dataset (Dataset): dataset to split
+            n (int): number of new subsets
+
+        Returns:
+            a list of subsets
+    """
     return random_split(dataset=dataset, lengths=np.repeat(int(len(dataset) / n), n))
 
 
 class CachingDataset(data.Dataset):
-    """A wrapper for torch Datasets that caches transformations"""
+    """
+    A wrapper for torch Datasets that caches transformations.
+    Avoids recomputing transformations every epoch"""
+
     def __init__(self, source_dataset):
         self.source_dataset = source_dataset
         self.cache = {}

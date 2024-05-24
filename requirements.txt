@@ -10,6 +10,4 @@ tqdm
 docopt-ng
 scipy
 duckdb
-plotly
-kaleido
 ucimlrepo

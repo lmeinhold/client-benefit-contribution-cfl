@@ -12,6 +12,11 @@ def _transform_onehot(a):
 
 
 class CIFAR10(Dataset):
+    """
+    A wrapper for the CIFAR10 dataset.
+    https://www.cs.toronto.edu/~kriz/cifar.html
+    """
+
     def __init__(self, save_dir: str):
         self.save_dir = save_dir
         self.transforms = transforms.Compose([

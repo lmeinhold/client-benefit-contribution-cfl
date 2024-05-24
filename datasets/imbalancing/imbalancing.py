@@ -6,10 +6,12 @@ from utils.torchutils import FixedRotationTransform, SingleTransformingSubset, P
 
 
 def generator_with_seed(seed: int) -> torch.Generator:
+    """Create a torch.Generator with the given seed"""
     return torch.Generator().manual_seed(seed)
 
 
 def extract_raw_data(dataset: Dataset) -> tuple[np.ndarray, np.ndarray]:
+    """Get features and labels as numpy.ndarrays from the given dataset"""
     if isinstance(dataset, TensorDataset):
         labels = np.asarray(dataset.tensors[1])
         features = np.asarray(dataset.tensors[0])
@@ -76,6 +78,8 @@ def split_with_fixed_num_labels(dataset: Dataset, n_clients: int, c: int = 2, se
 
 def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,
                                        **kwargs):
+    """Split a dataset into n subsets, applying a label distribution skew following a dirichlet distribution with
+    parameter alpha"""
     features, labels = extract_raw_data(dataset)
 
     n = len(dataset)
@@ -103,6 +107,8 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
 
 def split_with_feature_distribution_skew(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args,
                                          **kwargs):
+    """Split a dataset into n subsets, applying a feature distribution skew following a dirichlet distribution with
+    parameter alpha. Different features are creating by rotating images by 0, 90, 180 and 270°"""
     features, labels = extract_raw_data(dataset)
 
     n = len(dataset)
@@ -147,8 +153,8 @@ def split_with_transform_imbalance(dataset: Dataset, n_clients: int, transform_f
             zip(client_group_assignments, split_datasets)]
 
 
-def split_with_rotation(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None, *args, **kwargs) -> list[
-    Dataset]:
+def split_with_rotation(dataset: Dataset, n_clients: int, alpha: float = 1,
+                        seed: int = None, *args, **kwargs) -> list[Dataset]:
     """Split an image dataset applying rotation according to a dirichlet distribution"""
     rotations = [0, 90, 180, 270]
 
@@ -169,6 +175,7 @@ def split_with_rotation(dataset: Dataset, n_clients: int, alpha: float = 1, seed
 
 
 def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 5):
+    """Ensure that each client has at least min_size samples"""
     largest_client_index = np.argmax([len(x) for x in batch_indices])
     for j in range(n_clients):
         if len(batch_indices[j]) < min_size:
@@ -179,7 +186,6 @@ def apply_minimum_num_of_samples(batch_indices, n_clients, min_size: int = 5):
 
 def train_test_split(datasets, p_test=0.2, seed: int = 42):
     """Split a list of datasets into a list of train datasets and a list of test datasets"""
-
     train_sets = []
     test_sets = []
     for ds in datasets:

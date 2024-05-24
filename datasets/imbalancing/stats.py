@@ -10,20 +10,25 @@ from utils.torchutils import TransformingSubset
 
 
 class UniqueElementCounter:
+    """A counter that collects elements and counts how many unique items were added"""
+
     def __init__(self):
         self.elements = set()
 
     def add(self, elem: Any) -> "UniqueElementCounter":
+        """Add a single element"""
         self.elements.add(elem)
         return self
 
     def add_all(self, elems: Sequence[Any]) -> "UniqueElementCounter":
+        """Add a sequence of elements"""
         for elem in elems:
             self.elements.add(elem)
         return self
 
     @property
     def count(self) -> int:
+        """Get the count of unique elements that were added to the counter"""
         return len(self.elements)
 
 
@@ -33,7 +38,15 @@ def _phi_j(dataset: TransformingSubset, n_features: int) -> np.ndarray:
 
 
 def secure_aggregation_features(datasets: list[TransformingSubset]) -> tuple[np.ndarray, np.ndarray]:
-    """Computer secure aggregation feature vectors"""
+    """
+    Compute secure aggregation feature vectors
+
+        Parameters:
+            datasets: list of client datasets
+
+        Returns:
+            client feature vectors, global feature vector (sum of phi_js)
+    """
     feature_ids = UniqueElementCounter()
     for ds in datasets:
         feature_ids.add_all(ds.features)
@@ -54,7 +67,15 @@ def _feature_imbalance(phi_j: np.ndarray) -> float:
 
 
 def feature_imbalances(phi_js: np.ndarray) -> np.ndarray:
-    """Compute the label imbalance per client"""
+    """
+    Compute the label imbalance per client
+
+        Parameters:
+            phi_js: client feature vectors
+
+        Returns:
+            client feature imbalances
+    """
     return np.asarray(list(map(_feature_imbalance, phi_js)))
 
 
@@ -64,7 +85,16 @@ def _feature_distribution_imbalance(phi_j: np.ndarray, Phi: np.ndarray) -> float
 
 
 def feature_distribution_imbalances(phi_js: np.ndarray, Phi: np.ndarray) -> np.ndarray:
-    """Compute the label distribution imbalance per client"""
+    """
+    Compute the label distribution imbalance per client
+
+        Parameters:
+            phi_js: client feature vectors
+            Phi: global feature vector
+
+        Returns:
+            client feature distribution imbalances
+    """
     return np.asarray(list(map(lambda v_j: _feature_distribution_imbalance(v_j, Phi), phi_js)))
 
 
@@ -75,7 +105,15 @@ def _v_j(dataset: Dataset) -> np.ndarray:
 
 
 def secure_aggregation(datasets: list[Dataset]) -> tuple[np.ndarray, np.ndarray]:
-    """Compute the secure aggregation vectors v_j and V"""
+    """
+    Compute the secure aggregation vectors v_j and V
+
+        Parameters:
+            datasets: list of client datasets
+
+        Returns:
+            client label vectors, global label vector
+    """
     vjs = np.asarray(list(map(_v_j, datasets)))
     V = vjs.sum(axis=0)
     n = len(vjs[0])
@@ -93,7 +131,15 @@ def _label_imbalance(v_j: np.ndarray) -> float:
 
 
 def label_imbalances(vjs: np.ndarray) -> np.ndarray:
-    """Compute the label imbalance per client"""
+    """
+    Compute the label imbalance per client
+
+        Parameters:
+            vjs: client label vectors
+
+        Returns:
+            client label imbalances
+    """
     return np.asarray(list(map(_label_imbalance, vjs)))
 
 
@@ -103,7 +149,16 @@ def _label_distribution_imbalance(v_j: np.ndarray, V: np.ndarray) -> float:
 
 
 def label_distribution_imbalances(vjs: np.ndarray, V: np.ndarray) -> np.ndarray:
-    """Compute the label distribution imbalance per client"""
+    """
+    Compute the label distribution imbalance per client
+
+        Parameters:
+            vjs: client label vectors
+            V: global label vector
+
+        Returns:
+            client label distribution imbalances
+    """
     return np.asarray(list(map(lambda v_j: _label_distribution_imbalance(v_j, V), vjs)))
 
 
@@ -114,14 +169,31 @@ def _quantity_imbalance(v_j: np.ndarray, N: int, J: int) -> float:
 
 
 def quantity_imbalances(vjs: np.ndarray, V: np.ndarray) -> np.ndarray:
-    """Compute the quantity imbalance per client"""
+    """
+    Compute the quantity imbalance per client
+
+        Parameters:
+            vjs: client label vectors
+            V: global label vector
+
+        Returns:
+            client quantity imbalances
+    """
     N = V.sum()
     J = vjs.shape[0]
     return np.asarray(list(map(lambda v_j: _quantity_imbalance(v_j, N, J), vjs)))
 
 
 def li_ldi_qi(datasets: list[Dataset]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Compute label imbalance, label distribution imbalance and quantity imbalance for the given client datasets"""
+    """
+    Compute label imbalance, label distribution imbalance and quantity imbalance for the given client datasets
+
+        Parameters:
+            datasets: list of client datasets
+
+        Returns:
+            label imbalances, label distribution imbalances, quantity imbalances
+    """
     vjs, V = secure_aggregation(datasets)
     li = label_imbalances(vjs)
     ldi = label_distribution_imbalances(vjs, V)
@@ -131,6 +203,15 @@ def li_ldi_qi(datasets: list[Dataset]) -> tuple[np.ndarray, np.ndarray, np.ndarr
 
 
 def fi_fdi(datasets: list[TransformingSubset]) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Compute feature imbalance and feature distribution imbalance for the given client datasets
+
+        Parameters:
+            datasets: list of client datasets
+
+        Returns:
+            feature imbalance, feature distribution imbalance
+    """
     phi_js, Phi = secure_aggregation_features(datasets)
     fi = feature_imbalances(phi_js)
     fdi = feature_distribution_imbalances(phi_js, Phi)
@@ -139,7 +220,16 @@ def fi_fdi(datasets: list[TransformingSubset]) -> tuple[np.ndarray, np.ndarray]:
 
 
 def get_clusters_for_lxo(n_clusters, *args):
-    """Compute cluster identities for client contribution LXO via KMeans clustering"""
+    """
+    Compute cluster identities for client contribution LXO via KMeans clustering
+
+        Parameters:
+            n_clusters: number of clusters
+            *args: clustering features
+
+        Returns:
+            predicted labels for each client
+    """
     client_vectors = np.asarray(args).transpose()  # create feature vectors with clients row-wise
     kmeans = KMeans(n_clusters=n_clusters)
     kmeans.fit(client_vectors)

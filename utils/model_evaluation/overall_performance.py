@@ -53,7 +53,8 @@ def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
         .set_axis_labels("round", "weighted F1 score")
 
 
-def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation, weighted: bool = True):
+def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
+                                  weighted: bool = True):
     """Plot the final F1 scores for all algorithms/alphas"""
     final_f1_data = conn.sql(f"""SELECT algorithm,
                                                 imbalance_type,

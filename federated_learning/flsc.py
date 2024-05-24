@@ -15,13 +15,25 @@ def _fuse_model_weights(global_weights: list[StateDict], cluster_identities):
 
 
 class FLSC(FederatedLearningAlgorithm):
-    """Federate Learning with Soft-Clustering (FLSC)
-    Equivalent to Iterative Federated Clustering Algorithm (IFCA) if `clusters_per_client` is set to 1"""
+    """
+    Federate Learning with Soft-Clustering (FLSC). From Li et al., 2022: Federated Learning with Soft-Clustering.
+
+        Parameters:
+            model_class: the class of the model that is used by all clients or a function that evaluates to a model
+            optimizer_fn: a function that returns an optimizer given the `model.parameters()`
+            rounds: number of federated learning rounds
+            epochs: number of local model epochs per round
+            n_clusters: number of clusters to use
+            loss_fn: the loss function to be used (not including special terms/penalties used by the algorithms)
+            clusters_per_client: number of clusters per client
+            clients_per_round: a fraction of clients to use per round [default: all clients]
+            device: device to train the model on
+    """
 
     def __init__(self, model_class, optimizer_fn, rounds: int, epochs: int, n_clusters: int,
                  loss_fn, clusters_per_client: int = 1, clients_per_round: float = 1.0,
                  device="cpu"):
-        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, device)
+        super().__init__(model_class, loss_fn, optimizer_fn, rounds, epochs, clients_per_round, False, device)
         self.n_clusters = n_clusters
         self.clusters_per_client = clusters_per_client
 
@@ -93,7 +105,8 @@ class FLSC(FederatedLearningAlgorithm):
 
         return self.results
 
-    def _train_client_round(self, global_weights: list[StateDict], model, optimizer, cluster_identities, client_train_data) -> \
+    def _train_client_round(self, global_weights: list[StateDict], model, optimizer, cluster_identities,
+                            client_train_data) -> \
             tuple[
                 StateDict, np.ndarray]:
 
@@ -126,12 +139,11 @@ class FLSC(FederatedLearningAlgorithm):
 
             cluster_losses.append(loss / len(client_train_data))
 
-
-        new_identities = self.get_new_cluster_identities_from_losses(cluster_losses, self.clusters_per_client)
-        return new_identities
+        return self._get_new_cluster_identities_from_losses(cluster_losses, self.clusters_per_client)
 
     @staticmethod
-    def get_new_cluster_identities_from_losses(cluster_losses: np.ndarray | list[float], n: int) -> np.ndarray:
+    def _get_new_cluster_identities_from_losses(cluster_losses: np.ndarray | list[float], n: int) -> np.ndarray:
+        """Get clusters with the lowest loss"""
         return np.argsort(cluster_losses)[:n]
 
     def _test_client_round(self, model, client_test_data):
