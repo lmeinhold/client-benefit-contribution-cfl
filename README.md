@@ -1,4 +1,4 @@
-[![pipeline status](https://gitlab.com/bowerick/masterthesis-clustered-fl/badges/main/pipeline.svg)](https://gitlab.com/bowerick/masterthesis-clustered-fl/-/commits/main) ![coverage](https://gitlab.com/bowerick/masterthesis-clustered-fl/badges/main/coverage.svg?job=test)
+[![Python Tests](https://github.com/lmeinhold/client-benefit-contribution-cfl/actions/workflows/python-test.yaml/badge.svg)](https://github.com/lmeinhold/client-benefit-contribution-cfl/actions/workflows/python-test.yaml)
 
 # Client Benefit and Contribution in Clustered Federated Learning
 ## Setup
