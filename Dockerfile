@@ -1,4 +1,4 @@
-FROM python:3.11-bookworm
+FROM python:3.11-slim
 
 WORKDIR /usr/src/cfl
 
@@ -10,5 +10,4 @@ COPY datasets datasets
 COPY __init__.py __init__.py
 COPY *.py .
 COPY models models
-COPY scripts scripts
 COPY utils utils
