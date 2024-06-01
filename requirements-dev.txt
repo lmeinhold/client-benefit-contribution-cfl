@@ -1,5 +1,4 @@
-jupyter
-pytest
-pytest-cov
-pylint
-statsmodels
+jupyter>=1.0.0
+pytest>=8.2.1
+pytest-cov>=5.0.0
+statsmodels~=0.14.2
