@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import pandas as pd
+import polars as pl
 import torch
 from torch.utils import data
 from ucimlrepo import fetch_ucirepo
@@ -33,8 +33,8 @@ class Diabetes(Dataset):
             y = cdc_diabetes_health_indicators.data.targets
             y.to_csv(label_file, index=False)
 
-        X = pd.read_csv(feature_file).to_numpy()
-        y = pd.read_csv(label_file).to_numpy()
+        X = pl.read_csv(feature_file).to_numpy()
+        y = pl.read_csv(label_file).to_numpy()
 
         return torch.Tensor(X), torch.Tensor(y)
 
