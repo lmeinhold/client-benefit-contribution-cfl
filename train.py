@@ -478,7 +478,7 @@ def generate_configs(ttype, algorithms, n_clients, clients_per_round, clusters, 
                 for n_clusters in clusters:
                     for n_clusters_per_client in clusters_per_client:
                         if n_clusters_per_client >= n_clusters:
-                            # clusters per client must be lower than number of lusters, otherwise skip this config
+                            # clusters per client must be lower than number of clusters, otherwise skip this config
                             continue
                         for dataset in datasets:
                             for mu in penalty:

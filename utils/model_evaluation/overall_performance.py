@@ -3,7 +3,7 @@ import duckdb
 
 import seaborn as sns
 
-ALGORITHM_ORDER = ["local", "FedAvg", "FedProx", "IFCA", "FLSC"]
+ALGORITHM_ORDER = ["FedAvg", "FedProx", "IFCA", "FLSC"]
 
 
 def loss_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation, weighted: bool = True):
@@ -17,6 +17,7 @@ def loss_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelatio
                                             SUM(value * client_size) / SUM(client_size) AS weighted_loss,
                                             FROM run_data
                                             WHERE variable = 'loss'
+                                                AND algorithm <> 'local'
                                             GROUP BY algorithm, imbalance_type, imbalance_value, round, stage""").pl()
 
     title_format = "{col_name} (alpha={row_name})"
@@ -27,7 +28,7 @@ def loss_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelatio
     return sns.relplot(average_loss_data, x="round", y=y, col="algorithm", row="alpha", hue="stage", kind="line",
                        row_order=imbalance_order, col_order=ALGORITHM_ORDER)\
         .set_titles(title_format)\
-        .set_axis_labels("round", "weighted client loss")
+        .set_axis_labels("round", "weighted client loss")\
 
 
 def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation, weighted: bool = True):
@@ -40,6 +41,7 @@ def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
                                             SUM(value * client_size) / SUM(client_size) AS weighted_f1score,
                                             FROM run_data
                                             WHERE variable = 'f1' AND stage = 'test'
+                                                AND algorithm <> 'local'
                                             GROUP BY algorithm, imbalance_type, imbalance_value, round, n_clients""").pl()
 
     title_format = "{col_name}"

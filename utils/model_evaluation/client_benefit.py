@@ -33,5 +33,5 @@ def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBP
 
 def benefit_imbalance_plots(benefits, measure: str = 'quantity_imbalance'):
     grid = sns.FacetGrid(data=benefits, col='algorithm')
-    return grid.map(sns.regplot, data=benefits, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                    line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}")
+    return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
+                              line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}")
