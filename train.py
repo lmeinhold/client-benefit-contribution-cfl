@@ -354,6 +354,9 @@ def run_client_contribution(config: RunConfig, device, client_labels: np.ndarray
     metrics.append(metrics_df)
     infos.append(infos_df)
 
+    assert len(metrics) == len(infos)
+    assert len(metrics) == len(left_out_clients)
+
     return left_out_clients, metrics, infos
 
 
@@ -608,7 +611,7 @@ def main():
                     tables = get_tables(conn)
                     metrics_df["sub_id"] = sub_id
                     infos_df["sub_id"] = sub_id
-                    infos_df["left_out_clients"] = [left_out_clients for _ in range(len(infos_df))]
+                    infos_df["left_out_clients"] = lo
 
                     if "metrics" in tables:
                         conn.append("metrics", metrics_df)
