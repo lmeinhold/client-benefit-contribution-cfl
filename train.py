@@ -611,7 +611,7 @@ def main():
                     tables = get_tables(conn)
                     metrics_df["sub_id"] = sub_id
                     infos_df["sub_id"] = sub_id
-                    infos_df["left_out_clients"] = lo
+                    infos_df["left_out_clients"] = [lo for _ in range(len(infos_df))]
 
                     if "metrics" in tables:
                         conn.append("metrics", metrics_df)
