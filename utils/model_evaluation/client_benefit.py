@@ -3,10 +3,7 @@ import json
 
 import duckdb
 import pandas as pd
-
 import seaborn as sns
-
-import statsmodels.api as sm
 import statsmodels.formula.api as smf
 
 from utils.model_evaluation.common import MEASURE_LABELS
@@ -55,9 +52,9 @@ def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBP
 def benefit_imbalance_plots(benefits, measure: str = 'quantity_imbalance'):
     grid = sns.FacetGrid(data=benefits, col='algorithm')
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                              line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}")\
-                              .set_xlabels(label=MEASURE_LABELS[measure])\
-                              .set_ylabels(label="client benefit")
+                              line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}") \
+        .set_xlabels(label=MEASURE_LABELS[measure]) \
+        .set_ylabels(label="client benefit")
 
 
 def benefit_imbalance_reg_quantity(benefits):
@@ -89,7 +86,8 @@ def benefit_imbalance_reg_label(benefits):
     intercepts, p_intercepts, qis, p_qis, lis, p_lis, ldis, p_ldis, adj_rsqs = [], [], [], [], [], [], [], [], []
     for a in algorithms:
         df = benefits.query("algorithm == @a")
-        mod = smf.ols(formula="client_benefit ~ quantity_imbalance + label_imbalance + label_distribution_imbalance", data=df)
+        mod = smf.ols(formula="client_benefit ~ quantity_imbalance + label_imbalance + label_distribution_imbalance",
+                      data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
@@ -119,7 +117,8 @@ def benefit_imbalance_reg_feature(benefits):
     intercepts, p_intercepts, qis, p_qis, fis, p_fis, fdis, p_fdis, adj_rsqs = [], [], [], [], [], [], [], [], []
     for a in algorithms:
         df = benefits.query("algorithm == @a")
-        mod = smf.ols(formula="client_benefit ~ quantity_imbalance + feature_imbalance + feature_distribution_imbalance", data=df)
+        mod = smf.ols(
+            formula="client_benefit ~ quantity_imbalance + feature_imbalance + feature_distribution_imbalance", data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
@@ -148,7 +147,6 @@ def benefit_imbalance_cluster_plots(benefits, measure: str = 'quantity_imbalance
     alg_benefits = benefits.query("algorithm in ['IFCA', 'FLSC']").explode('cluster_identities')
     grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities', row='algorithm')
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                              line_kws={'color': 'orange'}, ci=95).set_titles("cluster {col_name}")\
-                              .set_xlabels(label=MEASURE_LABELS[measure])\
-                              .set_ylabels(label="client benefit")
-
+                              line_kws={'color': 'orange'}, ci=95).set_titles("IFCA, cl. {col_name}") \
+        .set_xlabels(label=MEASURE_LABELS[measure]) \
+        .set_ylabels(label="client benefit")
