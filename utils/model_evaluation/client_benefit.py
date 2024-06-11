@@ -6,7 +6,7 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
 
-from utils.model_evaluation.common import MEASURE_LABELS
+from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS, CLUSTER_ALGORITHMS
 
 
 def extract_cluster_assignments(info: str | None) -> list[int] | None:
@@ -50,7 +50,7 @@ def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBP
 
 
 def benefit_imbalance_plots(benefits, measure: str = 'quantity_imbalance'):
-    grid = sns.FacetGrid(data=benefits, col='algorithm')
+    grid = sns.FacetGrid(data=benefits, col='algorithm', col_order=ALGORITHMS)
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
                               line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
@@ -145,8 +145,8 @@ def benefit_imbalance_reg_feature(benefits):
 
 def benefit_imbalance_cluster_plots(benefits, measure: str = 'quantity_imbalance'):
     alg_benefits = benefits.query("algorithm in ['IFCA', 'FLSC']").explode('cluster_identities')
-    grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities', row='algorithm')
+    grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities', row='algorithm', row_order=CLUSTER_ALGORITHMS)
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                              line_kws={'color': 'orange'}, ci=95).set_titles("IFCA, cl. {col_name}") \
+                              line_kws={'color': 'orange'}, ci=95).set_titles("{row_name}, cl. {col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
         .set_ylabels(label="client benefit")

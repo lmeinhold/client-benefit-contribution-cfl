@@ -5,3 +5,6 @@ MEASURE_LABELS = {
     "label_imbalance": "LI",
     "label_distribution_imbalance": "LDI",
 }
+
+ALGORITHMS = ["FedAvg", "FedProx", "IFCA", "FLSC"]
+CLUSTER_ALGORITHMS = ["IFCA", "FLSC"]

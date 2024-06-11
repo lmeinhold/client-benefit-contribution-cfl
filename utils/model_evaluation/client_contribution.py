@@ -3,7 +3,7 @@ import polars as pl
 import seaborn as sns
 import statsmodels.formula.api as smf
 
-from utils.model_evaluation.common import MEASURE_LABELS
+from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS
 
 
 def compute_client_contribution(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBPyRelation) -> pl.DataFrame:
@@ -55,7 +55,7 @@ def compute_client_contribution(conn: duckdb.DuckDBPyConnection, data: duckdb.Du
 
 
 def contribution_imbalance_plots(contribution, measure: str = 'quantity_imbalance'):
-    grid = sns.FacetGrid(data=contribution, col='algorithm')
+    grid = sns.FacetGrid(data=contribution, col='algorithm', col_order=ALGORITHMS)
     return grid.map_dataframe(sns.regplot, x=measure, y='client_contribution', scatter_kws={'s': 5},
                               line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
