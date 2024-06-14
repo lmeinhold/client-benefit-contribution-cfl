@@ -93,6 +93,7 @@ IMBALANCES = {
     "label_distribution": split_with_label_distribution_skew,
     "feature_distribution_single_rotation": split_with_rotation,
     "feature_distribution_rotation_mix": split_with_feature_distribution_skew,
+    "feature_distributiont": split_with_label_distribution_skew_alternative,
 }
 
 ALL_DATASETS = DATASETS.keys()
