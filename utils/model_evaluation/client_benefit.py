@@ -2,11 +2,13 @@
 import json
 
 import duckdb
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
 
-from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS, CLUSTER_ALGORITHMS
+from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS, CLUSTER_ALGORITHMS, fix_client_labels, \
+    extract_majority_label
 
 
 def extract_cluster_assignments(info: str | None) -> list[int] | None:
@@ -23,7 +25,7 @@ def extract_cluster_assignments(info: str | None) -> list[int] | None:
 def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBPyRelation) -> pd.DataFrame:
     last_round_f1scores = conn.sql("""SELECT algorithm, client, imbalance_value, client_size, value, quantity_imbalance, 
                         label_imbalance, label_distribution_imbalance, feature_imbalance, feature_distribution_imbalance,
-                        info
+                        info, client_size, client_labels, client_features
                      FROM data WHERE round = rounds - 1 AND stage = 'test' AND variable = 'f1'""")
 
     f1scores_local = conn.sql("""SELECT * FROM last_round_f1scores WHERE algorithm = 'local'""")
@@ -40,12 +42,19 @@ def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBP
            a.feature_imbalance,
            a.feature_distribution_imbalance,
            a.value - l.value AS client_benefit,
-           a.info
+           a.info,
+           a.client_size,
+           a.client_labels,
+           a.client_features
     FROM f1scores_nonlocal a
         JOIN f1scores_local l USING(client, imbalance_value)
     """).df()
 
     benefits["cluster_identities"] = benefits["info"].apply(extract_cluster_assignments)
+    benefits.loc[:, "client_labels"] = benefits["client_labels"].astype(str).apply(fix_client_labels)
+    benefits["majority_label"] = benefits["client_labels"].apply(extract_majority_label)
+    benefits["majority_feature"] = benefits["client_features"].apply(extract_majority_label)
+
     return benefits
 
 
@@ -143,10 +152,73 @@ def benefit_imbalance_reg_feature(benefits):
     })
 
 
-def benefit_imbalance_cluster_plots(benefits, measure: str = 'quantity_imbalance'):
-    alg_benefits = benefits.query("algorithm in ['IFCA', 'FLSC']").explode('cluster_identities')
+def benefit_imbalance_cluster_plots(benefits, measure: str = 'quantity_imbalance', imbalance_value: float = 0.1):
+    alg_benefits = benefits.query("algorithm in ['IFCA', 'FLSC'] and imbalance_value == @imbalance_value") \
+        .explode('cluster_identities')
     grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities', row='algorithm', row_order=CLUSTER_ALGORITHMS)
-    return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                              line_kws={'color': 'orange'}, ci=95).set_titles("{row_name}, cl. {col_name}") \
+
+    scatter_kws = {'s': 5}
+
+    return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws=scatter_kws,
+                              line_kws={'color': 'orange'}, ci=95) \
+        .set_titles("{row_name}, cl. {col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
         .set_ylabels(label="client benefit")
+
+
+def benefit_imbalance_cluster_plots_colors(benefits, measure: str = 'quantity_imbalance', color_by: str = None,
+                                           imbalance_value: float = 0.1):
+    alg_benefits = benefits.query("algorithm in ['IFCA', 'FLSC'] and imbalance_value == @imbalance_value") \
+        .explode('cluster_identities')
+    grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities', row='algorithm', row_order=CLUSTER_ALGORITHMS)
+
+    scatter_kws = {'s': 10}
+    if color_by == 'label':
+        scatter_kws['hue'] = 'majority_label'
+    elif color_by == 'feature':
+        scatter_kws['hue'] = 'majority_feature'
+
+    return grid.map_dataframe(sns.scatterplot, x=measure, y='client_benefit', **scatter_kws) \
+        .set_titles("{row_name}, cl. {col_name}") \
+        .set_xlabels(label=MEASURE_LABELS[measure]) \
+        .set_ylabels(label="client benefit")
+
+
+def benefit_cluster_histograms(benefits, imbalance_value: float = 0.1, algorithm="IFCA", by='majority_label'):
+    alg_benefits = benefits.query("algorithm == @algorithm and imbalance_value == @imbalance_value") \
+        .explode('cluster_identities')
+
+    xlabel = None
+    if by == 'majority_label':
+        xlabel = 'majority client label'
+    elif by == 'majority_feature':
+        xlabel = 'majority client feature'
+    else:
+        raise Exception()
+
+    grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities')
+    return grid.map_dataframe(sns.countplot, x=by, order=list(range(10))) \
+        .set_titles("cl. {col_name}") \
+        .set_xlabels(label='majority client label')
+
+
+def benefit_cluster_histogram(benefits, imbalance_value: float = 0.1, algorithm="IFCA", by='label'):
+    value_col = 'client_labels' if by == 'label' else 'client_features'
+    alg_benefits = benefits.query("algorithm == @algorithm and imbalance_value == @imbalance_value") \
+        .explode('cluster_identities') \
+        .explode(value_col)
+    alg_benefits['cluster_identities'] = alg_benefits['cluster_identities'].astype('category')
+    alg_benefits[value_col] = alg_benefits[value_col].astype('category')
+
+    ax = sns.histplot(
+        data=alg_benefits,
+        x='cluster_identities',
+        hue=value_col,
+        multiple='stack',
+        alpha=1.0,
+    )
+
+    sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1), title=by)
+    ax.set(xlabel='cluster', ylabel='count')
+
+    return ax.get_figure()

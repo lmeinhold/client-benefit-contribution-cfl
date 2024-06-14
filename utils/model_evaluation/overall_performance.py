@@ -50,7 +50,7 @@ def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
     y = "weighted_f1score" if weighted else "f1score"
 
     return sns.relplot(average_f1_data, x="round", y=y, col="algorithm", hue="alpha", kind="line",
-                       row_order=imbalance_order, col_order=ALGORITHM_ORDER)\
+                       row_order=imbalance_order, col_order=ALGORITHM_ORDER, palette=sns.color_palette('colorblind'))\
         .set_titles(title_format)\
         .set_axis_labels("round", "weighted F1 score")
 
