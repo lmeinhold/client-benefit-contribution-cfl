@@ -105,7 +105,7 @@ def split_with_label_distribution_skew(dataset: Dataset, n_clients: int, alpha: 
     return [CustomSubset(dataset, indices) for indices in batch_indices]
 
 
-def split_with_label_distribution_skew_alternative(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None,
+def split_with_feature_distribution_skew_alternative(dataset: Dataset, n_clients: int, alpha: float = 1, seed: int = None,
                                                    *args, **kwargs):
     """Split a dataset into n subsets, applying a label distribution skew following a dirichlet distribution with
     parameter alpha"""
@@ -117,7 +117,7 @@ def split_with_label_distribution_skew_alternative(dataset: Dataset, n_clients: 
     n_rotations = len(angles)
 
     # generate iid features
-    rotations = np.random.choice(np.arange(n_rotations), len(features), replace=False)
+    rotations = np.random.choice(np.arange(n_rotations), len(features), replace=True)
 
     batch_indices = [[] for _ in range(n_clients)]
 
