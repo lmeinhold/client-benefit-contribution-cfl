@@ -10,7 +10,7 @@ def loss_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelatio
     """Plot loss vs. round for all algorithms/alphas"""
     average_loss_data = conn.sql(f"""SELECT algorithm,
                                             imbalance_type,
-                                            imbalance_value as alpha,
+                                            imbalance_value as beta,
                                             round,
                                             stage,
                                             MEAN(value) AS loss,
@@ -20,22 +20,22 @@ def loss_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelatio
                                                 AND algorithm <> 'local'
                                             GROUP BY algorithm, imbalance_type, imbalance_value, round, stage""").pl()
 
-    title_format = "{col_name} (alpha={row_name})"
-    imbalance_order = sorted(average_loss_data["alpha"].unique())
+    title_format = "{col_name} ($\\beta={row_name}$)"
+    imbalance_order = sorted(average_loss_data["beta"].unique())
 
     y = "weighted_loss" if weighted else "loss"
 
-    return sns.relplot(average_loss_data, x="round", y=y, col="algorithm", row="alpha", hue="stage", kind="line",
+    return sns.relplot(average_loss_data, x="round", y=y, col="algorithm", row="beta", hue="stage", kind="line",
                        row_order=imbalance_order, col_order=ALGORITHM_ORDER)\
         .set_titles(title_format)\
-        .set_axis_labels("round", "weighted client loss")\
+        .set_axis_labels("round", "client dataset loss")\
 
 
 def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation, weighted: bool = True):
     """Plot F1 score vs round for all algorithms/alphas"""
     average_f1_data = conn.sql(f"""SELECT algorithm,
                                             imbalance_type,
-                                            imbalance_value as alpha,
+                                            imbalance_value as beta,
                                             round,
                                             MEAN(value) AS f1score,
                                             SUM(value * client_size) / SUM(client_size) AS weighted_f1score,
@@ -45,14 +45,14 @@ def f1_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
                                             GROUP BY algorithm, imbalance_type, imbalance_value, round, n_clients""").pl()
 
     title_format = "{col_name}"
-    imbalance_order = sorted(average_f1_data["alpha"].unique())
+    imbalance_order = sorted(average_f1_data["beta"].unique())
 
     y = "weighted_f1score" if weighted else "f1score"
 
-    return sns.relplot(average_f1_data, x="round", y=y, col="algorithm", hue="alpha", kind="line",
+    return sns.relplot(average_f1_data, x="round", y=y, col="algorithm", hue="beta", kind="line",
                        row_order=imbalance_order, col_order=ALGORITHM_ORDER, palette=sns.color_palette('colorblind'))\
         .set_titles(title_format)\
-        .set_axis_labels("round", "weighted F1 score")
+        .set_axis_labels("round", "F1 score")
 
 
 def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duckdb.DuckDBPyRelation,
@@ -60,7 +60,7 @@ def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duc
     """Plot the final F1 scores for all algorithms/alphas"""
     final_f1_data = conn.sql(f"""SELECT algorithm,
                                                 imbalance_type,
-                                                imbalance_value as alpha,
+                                                imbalance_value as beta,
                                                 round,
                                                 MEAN(value) AS f1score,
                                                 SUM(value * client_size) / SUM(client_size) AS weighted_f1score,
@@ -72,6 +72,6 @@ def overall_f1_vs_imbalance_plots(conn: duckdb.DuckDBPyConnection, run_data: duc
 
     y = "weighted_f1score" if weighted else "f1score"
 
-    ax = sns.pointplot(final_f1_data, x="alpha", y=y, hue="algorithm")
-    ax.set(xlabel="alpha", ylabel="F1 score")
+    ax = sns.pointplot(final_f1_data, x="beta", y=y, hue="algorithm", hue_order=['local'] + ALGORITHM_ORDER)
+    ax.set(xlabel="$\\beta$", ylabel="F1 score")
     return ax.get_figure()

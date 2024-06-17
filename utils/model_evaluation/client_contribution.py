@@ -2,6 +2,9 @@ import duckdb
 import polars as pl
 import seaborn as sns
 import statsmodels.formula.api as smf
+import numpy as np
+
+_ = np.nan # prevent optimizing numpy import away
 
 from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS
 
@@ -43,7 +46,7 @@ def compute_client_contribution(conn: duckdb.DuckDBPyConnection, data: duckdb.Du
             d.label_imbalance,
             d.label_distribution_imbalance,
             d.feature_imbalance,
-            d.feature_distribution_imbalance,
+            d.feature_distribution_imbalance
         FROM contributions c
             JOIN data_distributions d ON
                  c.imbalance_type = d.imbalance_type
@@ -88,28 +91,24 @@ def contribution_imbalance_reg_quantity(contributions):
 
 def contribution_imbalance_reg_label(contributions):
     algorithms = list(contributions["algorithm"].unique())
-    intercepts, p_intercepts, qis, p_qis, lis, p_lis, ldis, p_ldis, adj_rsqs = [], [], [], [], [], [], [], [], []
+    intercepts, p_intercepts, lis, p_lis, ldis, p_ldis, adj_rsqs = [], [], [], [], [], [], []
     for a in algorithms:
         df = contributions.filter(pl.col("algorithm") == a)
         mod = smf.ols(
-            formula="client_contribution ~ quantity_imbalance + label_imbalance + label_distribution_imbalance",
+            formula="client_contribution ~ + label_imbalance + label_distribution_imbalance",
             data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
-        qis.append(res.params.iloc[1])
-        lis.append(res.params.iloc[2])
-        ldis.append(res.params.iloc[3])
-        p_qis.append(res.pvalues.iloc[1])
-        p_lis.append(res.pvalues.iloc[2])
-        p_ldis.append(res.pvalues.iloc[3])
+        lis.append(res.params.iloc[1])
+        ldis.append(res.params.iloc[2])
+        p_lis.append(res.pvalues.iloc[1])
+        p_ldis.append(res.pvalues.iloc[2])
         adj_rsqs.append(res.rsquared_adj)
 
     return pl.DataFrame({
         "algorithm": algorithms,
         "intercept": intercepts,
-        "beta_QI": qis,
-        "p_QI": p_qis,
         "beta_LI": lis,
         "p_LI": p_lis,
         "beta_LDI": ldis,
@@ -120,28 +119,24 @@ def contribution_imbalance_reg_label(contributions):
 
 def contribution_imbalance_reg_feature(contributions):
     algorithms = list(contributions["algorithm"].unique())
-    intercepts, p_intercepts, qis, p_qis, fis, p_fis, fdis, p_fdis, adj_rsqs = [], [], [], [], [], [], [], [], []
+    intercepts, p_intercepts, fis, p_fis, fdis, p_fdis, adj_rsqs = [], [], [], [], [], [], []
     for a in algorithms:
         df = contributions.filter(pl.col("algorithm") == a)
         mod = smf.ols(
-            formula="client_contribution ~ quantity_imbalance + feature_imbalance + feature_distribution_imbalance",
+            formula="client_contribution ~ + feature_imbalance + feature_distribution_imbalance",
             data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
-        qis.append(res.params.iloc[1])
-        fis.append(res.params.iloc[2])
-        fdis.append(res.params.iloc[3])
-        p_qis.append(res.pvalues.iloc[1])
-        p_fis.append(res.pvalues.iloc[2])
-        p_fdis.append(res.pvalues.iloc[3])
+        fis.append(res.params.iloc[1])
+        fdis.append(res.params.iloc[2])
+        p_fis.append(res.pvalues.iloc[1])
+        p_fdis.append(res.pvalues.iloc[2])
         adj_rsqs.append(res.rsquared_adj)
 
     return pl.DataFrame({
         "algorithm": algorithms,
         "intercept": intercepts,
-        "beta_QI": qis,
-        "p_QI": p_qis,
         "beta_LI": fis,
         "p_LI": p_fis,
         "beta_LDI": fdis,

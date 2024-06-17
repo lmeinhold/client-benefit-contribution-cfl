@@ -2,10 +2,12 @@
 import json
 
 import duckdb
-import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import statsmodels.formula.api as smf
+import numpy as np
+
+_ = np.nan # prevent optimizing numpy import away
 
 from utils.model_evaluation.common import MEASURE_LABELS, ALGORITHMS, CLUSTER_ALGORITHMS, fix_client_labels, \
     extract_majority_label
@@ -61,7 +63,8 @@ def compute_client_benefit(conn: duckdb.DuckDBPyConnection, data: duckdb.DuckDBP
 def benefit_imbalance_plots(benefits, measure: str = 'quantity_imbalance'):
     grid = sns.FacetGrid(data=benefits, col='algorithm', col_order=ALGORITHMS)
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws={'s': 5},
-                              line_kws={'color': 'orange'}, ci=95).set_titles("{col_name}") \
+                              line_kws={'color': 'orange'}, ci=95, logistic=measure == 'quantity_imbalance').set_titles(
+        "{col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
         .set_ylabels(label="client benefit")
 
@@ -71,7 +74,7 @@ def benefit_imbalance_reg_quantity(benefits):
     intercepts, qis, p_intercepts, p_qis, adj_rsqs = [], [], [], [], []
     for a in algorithms:
         df = benefits.query("algorithm == @a")
-        mod = smf.ols(formula="client_benefit ~ quantity_imbalance", data=df)
+        mod = smf.ols(formula="client_benefit ~ np.log(quantity_imbalance)", data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
@@ -84,7 +87,7 @@ def benefit_imbalance_reg_quantity(benefits):
         "algorithm": algorithms,
         "intercept": intercepts,
         "p_intercept": p_intercepts,
-        "beta_QI": qis,
+        "beta_log(QI)": qis,
         "p_QI": p_qis,
         "adj_Rsq": adj_rsqs,
     })
@@ -92,27 +95,23 @@ def benefit_imbalance_reg_quantity(benefits):
 
 def benefit_imbalance_reg_label(benefits):
     algorithms = list(benefits["algorithm"].unique())
-    intercepts, p_intercepts, qis, p_qis, lis, p_lis, ldis, p_ldis, adj_rsqs = [], [], [], [], [], [], [], [], []
+    intercepts, p_intercepts, lis, p_lis, ldis, p_ldis, adj_rsqs = [], [], [], [], [], [], []
     for a in algorithms:
         df = benefits.query("algorithm == @a")
-        mod = smf.ols(formula="client_benefit ~ quantity_imbalance + label_imbalance + label_distribution_imbalance",
+        mod = smf.ols(formula="client_benefit ~ label_imbalance + label_distribution_imbalance",
                       data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
-        qis.append(res.params.iloc[1])
-        lis.append(res.params.iloc[2])
-        ldis.append(res.params.iloc[3])
-        p_qis.append(res.pvalues.iloc[1])
-        p_lis.append(res.pvalues.iloc[2])
-        p_ldis.append(res.pvalues.iloc[3])
+        lis.append(res.params.iloc[1])
+        ldis.append(res.params.iloc[2])
+        p_lis.append(res.pvalues.iloc[1])
+        p_ldis.append(res.pvalues.iloc[2])
         adj_rsqs.append(res.rsquared_adj)
 
     return pd.DataFrame({
         "algorithm": algorithms,
         "intercept": intercepts,
-        "beta_QI": qis,
-        "p_QI": p_qis,
         "beta_LI": lis,
         "p_LI": p_lis,
         "beta_LDI": ldis,
@@ -123,27 +122,23 @@ def benefit_imbalance_reg_label(benefits):
 
 def benefit_imbalance_reg_feature(benefits):
     algorithms = list(benefits["algorithm"].unique())
-    intercepts, p_intercepts, qis, p_qis, fis, p_fis, fdis, p_fdis, adj_rsqs = [], [], [], [], [], [], [], [], []
+    intercepts, p_intercepts, fis, p_fis, fdis, p_fdis, adj_rsqs = [], [], [], [], [], [], []
     for a in algorithms:
         df = benefits.query("algorithm == @a")
         mod = smf.ols(
-            formula="client_benefit ~ quantity_imbalance + feature_imbalance + feature_distribution_imbalance", data=df)
+            formula="client_benefit ~ feature_imbalance + feature_distribution_imbalance", data=df)
         res = mod.fit()
 
         intercepts.append(res.params.iloc[0])
-        qis.append(res.params.iloc[1])
-        fis.append(res.params.iloc[2])
-        fdis.append(res.params.iloc[3])
-        p_qis.append(res.pvalues.iloc[1])
-        p_fis.append(res.pvalues.iloc[2])
-        p_fdis.append(res.pvalues.iloc[3])
+        fis.append(res.params.iloc[1])
+        fdis.append(res.params.iloc[2])
+        p_fis.append(res.pvalues.iloc[1])
+        p_fdis.append(res.pvalues.iloc[2])
         adj_rsqs.append(res.rsquared_adj)
 
     return pd.DataFrame({
         "algorithm": algorithms,
         "intercept": intercepts,
-        "beta_QI": qis,
-        "p_QI": p_qis,
         "beta_LI": fis,
         "p_LI": p_fis,
         "beta_LDI": fdis,
@@ -160,7 +155,7 @@ def benefit_imbalance_cluster_plots(benefits, measure: str = 'quantity_imbalance
     scatter_kws = {'s': 5}
 
     return grid.map_dataframe(sns.regplot, x=measure, y='client_benefit', scatter_kws=scatter_kws,
-                              line_kws={'color': 'orange'}, ci=95) \
+                              line_kws={'color': 'orange'}, ci=95, logistic=measure == 'quantity_imbalance') \
         .set_titles("{row_name}, cl. {col_name}") \
         .set_xlabels(label=MEASURE_LABELS[measure]) \
         .set_ylabels(label="client benefit")
@@ -184,25 +179,7 @@ def benefit_imbalance_cluster_plots_colors(benefits, measure: str = 'quantity_im
         .set_ylabels(label="client benefit")
 
 
-def benefit_cluster_histograms(benefits, imbalance_value: float = 0.1, algorithm="IFCA", by='majority_label'):
-    alg_benefits = benefits.query("algorithm == @algorithm and imbalance_value == @imbalance_value") \
-        .explode('cluster_identities')
-
-    xlabel = None
-    if by == 'majority_label':
-        xlabel = 'majority client label'
-    elif by == 'majority_feature':
-        xlabel = 'majority client feature'
-    else:
-        raise Exception()
-
-    grid = sns.FacetGrid(data=alg_benefits, col='cluster_identities')
-    return grid.map_dataframe(sns.countplot, x=by, order=list(range(10))) \
-        .set_titles("cl. {col_name}") \
-        .set_xlabels(label='majority client label')
-
-
-def benefit_cluster_histogram(benefits, imbalance_value: float = 0.1, algorithm="IFCA", by='label'):
+def benefit_cluster_histogram(benefits, imbalance_value: float = 0.1, algorithm="IFCA", by='label', title: str = None):
     value_col = 'client_labels' if by == 'label' else 'client_features'
     alg_benefits = benefits.query("algorithm == @algorithm and imbalance_value == @imbalance_value") \
         .explode('cluster_identities') \
@@ -218,7 +195,10 @@ def benefit_cluster_histogram(benefits, imbalance_value: float = 0.1, algorithm=
         alpha=1.0,
     )
 
+    if title is not None:
+        ax.set_title(title)
+
     sns.move_legend(ax, "upper left", bbox_to_anchor=(1, 1), title=by)
-    ax.set(xlabel='cluster', ylabel='count')
+    ax.set(xlabel='cluster', ylabel='# of samples')
 
     return ax.get_figure()
