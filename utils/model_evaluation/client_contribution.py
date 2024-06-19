@@ -130,6 +130,7 @@ def contribution_imbalance_reg_feature(contributions):
         intercepts.append(res.params.iloc[0])
         fis.append(res.params.iloc[1])
         fdis.append(res.params.iloc[2])
+        p_intercepts.append(res.pvalues[0])
         p_fis.append(res.pvalues.iloc[1])
         p_fdis.append(res.pvalues.iloc[2])
         adj_rsqs.append(res.rsquared_adj)
@@ -137,6 +138,7 @@ def contribution_imbalance_reg_feature(contributions):
     return pl.DataFrame({
         "algorithm": algorithms,
         "intercept": intercepts,
+        "p_intercept": p_intercepts,
         "beta_LI": fis,
         "p_LI": p_fis,
         "beta_LDI": fdis,
