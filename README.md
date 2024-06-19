@@ -12,19 +12,20 @@ pip install -r requirements-dev.txt
 
 ## How to Run
 ### Local
-Model training:
+Model training example:
 ```shell
 ./train.py --datasets=MNIST\
+      --type benefit
       --imbalance-types=label_distribution\
       --imbalances=0.1,1,10\
       --algorithms=FedAvg,IFCA\
       --rounds=3\
       --epochs=5\
-      --penalty=0\
+      --penalty=1\
       --n-clients=80\
       --clients-per-round=0.8\
       --clusters=5\
-      --clusters-per-client=1
+      --clusters-per-client=2
 ```
 
 View help:
